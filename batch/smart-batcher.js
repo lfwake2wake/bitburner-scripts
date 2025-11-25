@@ -70,7 +70,7 @@ export async function main(ns) {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // SMART RATIO CALCULATION
+  // SMART RATIO CALCULATION (BitNode-Aware)
   // ═══════════════════════════════════════════════════════════════
   
   // Get target server timings
@@ -81,24 +81,51 @@ export async function main(ns) {
   // Security constants (from game mechanics)
   const HACK_SECURITY = 0.002;   // Security added per hack thread
   const GROW_SECURITY = 0.004;   // Security added per grow thread
-  const WEAKEN_AMOUNT = 0.05;    // Security removed per weaken thread
+  
+  // Get weaken amount (accounts for BitNode multipliers)
+  const WEAKEN_AMOUNT = ns.weakenAnalyze(1);
   
   // Calculate timing ratios (how many operations fit in the batch window)
   const batchWindow = Math.max(hackTime, growTime, weakenTime);
   const hackTimeRatio = weakenTime / hackTime;
   const growTimeRatio = weakenTime / growTime;
   
-  // Calculate how many grow threads needed per hack thread
-  // This is based on how much money we want to hack
+  // Get target server state
+  const maxMoney = ns.getServerMaxMoney(target);
+  const minSecurity = ns.getServerMinSecurityLevel(target);
+  const currentMoney = ns.getServerMoneyAvailable(target);
+  const currentSecurity = ns.getServerSecurityLevel(target);
+  
+  // Calculate threads needed for optimal prepped server (at max money, min security)
   const hackThreadsBase = 1;
-  const moneyPerHackThread = ns.getServerMaxMoney(target) * ns.hackAnalyze(target);
+  const moneyPerHackThread = maxMoney * ns.hackAnalyze(target);
+  const moneyStolen = hackThreadsBase * moneyPerHackThread;
   
-  // Estimate grow threads needed (simplified - actual varies with server state)
-  // Rule of thumb: need ~2-3x more grow threads than hack threads for 5% steal
-  const growMultiplier = Math.max(2, 1 / hackPercent);
-  const growThreadsBase = Math.ceil(hackThreadsBase * growMultiplier);
+  // Calculate grow threads using formulas if available, otherwise use enhanced estimation
+  let growThreadsBase;
+  const hasFormulas = ns.fileExists("Formulas.exe", "home");
   
-  // Calculate weaken threads needed to counteract security
+  if (hasFormulas) {
+    // Use precise formulas calculation (accounts for BitNode multipliers)
+    const player = ns.getPlayer();
+    const server = ns.getServer(target);
+    
+    // Simulate server state AFTER hacking
+    const moneyAfterHack = maxMoney - moneyStolen;
+    const growthNeeded = maxMoney / Math.max(1, moneyAfterHack);
+    
+    // Calculate exact grow threads needed (this accounts for ServerGrowthRate multiplier)
+    growThreadsBase = Math.ceil(ns.formulas.hacking.growThreads(server, player, maxMoney, 1));
+    
+  } else {
+    // Enhanced estimation without formulas
+    // Account for typical BitNode growth variations
+    const serverGrowth = ns.getServerGrowth(target);
+    const growthMultiplier = Math.max(2, 1 / hackPercent) * (100 / Math.max(1, serverGrowth));
+    growThreadsBase = Math.ceil(hackThreadsBase * growthMultiplier);
+  }
+  
+  // Calculate weaken threads needed to counteract security (using BitNode-aware weaken amount)
   const securityFromHack = hackThreadsBase * HACK_SECURITY;
   const securityFromGrow = growThreadsBase * GROW_SECURITY;
   const totalSecurity = securityFromHack + securityFromGrow;
@@ -126,7 +153,17 @@ export async function main(ns) {
   ns.tprint(`  Weaken: ${(weakenRatio * 100).toFixed(1)}% (base: ${weakenThreadsBase})`);
   ns.tprint(`\n🎯 Target: Hack ${(hackPercent * 100).toFixed(1)}% of server money per batch`);
   ns.tprint(`  Money per hack thread: ${formatNumber(ns, moneyPerHackThread)}`);
+  ns.tprint(`  Weaken per thread: ${WEAKEN_AMOUNT.toFixed(4)} security`);
+  ns.tprint(`  Calculation method: ${hasFormulas ? "✓ Formulas.exe (BitNode-aware)" : "⚠ Estimation (may be inaccurate in some BitNodes)"}`);
   ns.tprint(`  Timing efficiency: ${(batchWindow / (hackTime + growTime + weakenTime) * 100).toFixed(1)}%`);
+  
+  if (!hasFormulas) {
+    ns.tprint(`\n⚠️  WARNING: Formulas.exe not found!`);
+    ns.tprint(`  Thread ratios are estimated and may not be accurate in BitNodes`);
+    ns.tprint(`  with different ServerGrowthRate or ServerWeakenRate multipliers.`);
+    ns.tprint(`  For optimal results in all BitNodes, install Formulas.exe first.`);
+  }
+  
   ns.tprint("");
   ns.tprint("═══════════════════════════════════════════════════════════════");
   

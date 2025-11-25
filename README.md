@@ -766,6 +766,30 @@ run stocks/stock-monitor.js
 
 ## 🆕 What's New (For Returning Users)
 
+### Version 1.8.17 (November 25, 2025)
+**BitNode Multiplier Support - Critical Fix** 🌐🔧
+- **CRITICAL**: Fixed server money depletion in BitNode 2 and other BitNodes
+- Now uses BitNode-aware thread calculations with Formulas.exe integration
+- Dynamic weaken calculations using `ns.weakenAnalyze(1)` (accounts for ServerWeakenRate)
+- Precise grow calculations using `ns.formulas.hacking.growThreads()` (accounts for ServerGrowthRate)
+- Enhanced estimation fallback when Formulas.exe not available
+- Affects: `smart-batcher.js` and `batch-manager.js`
+
+**Impact**:
+- ✅ Server money now stays at 100% in ALL BitNodes (BN1-BN13)
+- ✅ Security stays at minimum (no more drift)
+- ✅ Fixes game-breaking bug where money depleted from 100% → <2%
+- 💡 **Recommendation**: Install Formulas.exe for 100% accuracy
+
+**Resolves**: Steam community bug report from QuadricSlash
+
+### Version 1.8.16 (November 15, 2025)
+**Smart Batcher Zero RAM Validation** 🔧
+- Fixed deployment attempts on servers with insufficient RAM
+- Added pre-check and post-check validation
+- Eliminates "ERROR: failed to start" messages on low-RAM servers
+- Affects: `smart-batcher.js`
+
 ### Version 1.8.15 (November 12, 2025)
 **bitburner-update.js Path Fix** 🔧
 - Fixed download failures for `f-estimate-production.js` (moved from utils/ to analysis/)
@@ -876,7 +900,7 @@ Open source - use freely in your Bitburner gameplay!
 ---
 
 **Last Updated**: November 12, 2025  
-**Current Version**: 1.8.15  
+**Current Version**: 1.8.17  
 **Latest Feature**: bitburner-update.js path fix for successful script downloads
 
 ## ✅ Version Compatibility

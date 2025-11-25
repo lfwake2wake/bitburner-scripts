@@ -159,6 +159,21 @@ Complete index of all documentation for the Bitburner script collection.
 
 ---
 
+### [BITNODE_MULTIPLIER_FIX.md](Bug Fixes/BITNODE_MULTIPLIER_FIX.md) 🌐🔧 NEW!
+**BitNode Multiplier Support (v1.8.17)**
+- Critical fix for server money depletion in BitNode 2
+- BitNode-aware thread calculations
+- Formulas.exe integration for 100% accuracy
+- Enhanced estimation fallback
+- BitNode compatibility matrix (BN1-BN13)
+- Technical deep dive into grow/weaken calculations
+- Testing results and performance impact
+- Migration guide and troubleshooting
+
+**When to use**: Understanding BitNode multiplier support, troubleshooting money depletion issues, or learning about Formulas.exe integration
+
+---
+
 ### [PROJECT_STRUCTURE.md](Reference/PROJECT_STRUCTURE.md)
 **Directory Structure and Organization**
 - Complete directory tree
