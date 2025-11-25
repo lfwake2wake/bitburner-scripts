@@ -899,9 +899,9 @@ Open source - use freely in your Bitburner gameplay!
 
 ---
 
-**Last Updated**: November 12, 2025  
-**Current Version**: 1.8.17  
-**Latest Feature**: bitburner-update.js path fix for successful script downloads
+**Last Updated**: November 25, 2025  
+**Current Version**: 1.8.18  
+**Latest Feature**: profit-scan-flex.js v3.0.0+ compatibility (eliminated ns.nFormat deprecation warning)
 
 ## ✅ Version Compatibility
 

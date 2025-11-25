@@ -299,19 +299,31 @@ export async function main(ns) {
 }
 
 /**
- * Format number for both v2.x and v3.x compatibility
+ * Format number with v2.x/v3.x compatibility
  * @param {NS} ns
  * @param {number} v - Value to format
  */
 function formatNumber(ns, v) {
-  // Try old nFormat (v2.x) first
+  // Three-tier compatibility approach:
+  // 1. Try ns.formatNumber() (v3.0.0+ method)
+  // 2. Fall back to ns.nFormat() (v2.8.1 method - deprecated)
+  // 3. Manual formatting fallback
+  
   try {
-    return ns.nFormat(v, "$0.00a");
-  } catch (e) {
-    // nFormat removed, use custom formatting for v3.x
-    if (v >= 1e9) return `$${(v/1e9).toFixed(2)}b`;
-    if (v >= 1e6) return `$${(v/1e6).toFixed(2)}m`;
-    if (v >= 1e3) return `$${(v/1e3).toFixed(2)}k`;
-    return `$${v.toFixed(2)}`;
-  }
+    if (ns.formatNumber) {
+      return ns.formatNumber(v, "$0.00a");
+    }
+  } catch (e) {}
+  
+  try {
+    if (ns.nFormat) {
+      return ns.nFormat(v, "$0.00a");
+    }
+  } catch (e) {}
+  
+  // Manual formatting fallback
+  if (v >= 1e9) return `$${(v/1e9).toFixed(2)}b`;
+  if (v >= 1e6) return `$${(v/1e6).toFixed(2)}m`;
+  if (v >= 1e3) return `$${(v/1e3).toFixed(2)}k`;
+  return `$${v.toFixed(2)}`;
 }

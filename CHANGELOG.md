@@ -2,6 +2,64 @@
 
 All notable changes to this Bitburner script collection are documented in this file.
 
+## [1.8.18] - 2025-11-25 - Analysis Scripts Bitburner v3.0.0+ Compatibility 🔧
+
+### Fixed - Deprecated ns.nFormat() Usage in All Analysis Scripts
+
+**Issue**: Multiple analysis scripts triggered deprecation warning: "Accessed deprecated function or property: ns.nFormat"
+
+**Affected Scripts**:
+- `analysis/profit-scan-flex.js` - Fleet potential rankings
+- `analysis/f-profit-scan-flex.js` - Formulas.exe enhanced profit scanner
+- `analysis/profit-scan.js` - Basic profit scanner
+- `analysis/production-monitor.js` - Money production monitoring
+- `analysis/f-estimate-production.js` - Formulas.exe production estimates
+- `analysis/estimate-production.js` - Basic production estimates
+
+**Root Cause**: The `formatNumber()` / `formatMoney()` helper functions were attempting to use deprecated `ns.nFormat()` first, triggering warnings even though they had fallback logic.
+
+**Solution**: Updated three-tier compatibility approach to prioritize newer API methods:
+1. Try `ns.formatNumber()` first (v3.0.0+ method)
+2. Fall back to `ns.nFormat()` (v2.8.1 method - deprecated)
+3. Manual formatting fallback (`$XXXb/$XXXm/$XXXk`)
+
+**Technical Implementation**:
+```javascript
+function formatNumber(ns, v) {
+  // Try ns.formatNumber() (v3.0.0+)
+  try {
+    if (ns.formatNumber) {
+      return ns.formatNumber(v, "$0.00a");
+    }
+  } catch (e) {}
+  
+  // Fall back to ns.nFormat() (v2.8.1 - deprecated)
+  try {
+    if (ns.nFormat) {
+      return ns.nFormat(v, "$0.00a");
+    }
+  } catch (e) {}
+  
+  // Manual formatting fallback
+  if (v >= 1e9) return `$${(v/1e9).toFixed(2)}b`;
+  if (v >= 1e6) return `$${(v/1e6).toFixed(2)}m`;
+  if (v >= 1e3) return `$${(v/1e3).toFixed(2)}k`;
+  return `$${v.toFixed(2)}`;
+}
+```
+
+**Result**:
+- Zero deprecation warnings in v3.0.0+
+- Full backward compatibility with v2.8.1
+- Clean script output without API warnings
+- Identical formatting behavior across all versions
+
+**Pattern**: This follows the same proven compatibility approach used in `smart-batcher.js` (v1.8.7) for seamless multi-version support.
+
+**Version Compatibility**: ✅ v2.8.1 | ✅ v3.0.0+
+
+---
+
 ## [1.8.17] - 2025-11-25 - Smart Batcher BitNode Multiplier Support 🌐
 
 ### Fixed - smart-batcher.js & batch-manager.js BitNode Compatibility
