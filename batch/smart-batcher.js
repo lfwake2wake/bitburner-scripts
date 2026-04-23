@@ -48,6 +48,16 @@ export async function main(ns) {
   const includeHome = args.includes("--include-home") || args.includes("-H");
   const quiet = args.includes("--quiet") || args.includes("-q");
   const dryRun = args.includes("--dry") || args.includes("-n");
+  
+  // Parse --max-ram flag (e.g. --max-ram=1024 or --max-ram 1024)
+  let maxRamBudget = Infinity;
+  const maxRamFlag = args.find(a => typeof a === "string" && a.startsWith("--max-ram="));
+  const maxRamArgIdx = args.indexOf("--max-ram");
+  if (maxRamFlag) {
+    maxRamBudget = Number(maxRamFlag.split("=")[1]);
+  } else if (maxRamArgIdx !== -1 && args[maxRamArgIdx + 1]) {
+    maxRamBudget = Number(args[maxRamArgIdx + 1]);
+  }
 
   const log = (...parts) => {
     const msg = parts.join(" ");
@@ -256,7 +266,12 @@ export async function main(ns) {
     let maxRam = ns.getServerMaxRam(h);
     let usedRam = ns.getServerUsedRam(h);
     let freeRam = Math.max(0, maxRam - usedRam);
-
+    
+    // Cap to remaining RAM budget if --max-ram specified
+    freeRam = Math.min(freeRam, maxRamBudget);
+    maxRamBudget -= freeRam;
+    if (freeRam <= 0) continue;
+    
     // Get RAM cost for each script
     const hackRam = ns.getScriptRam(hackScript, h);
     const growRam = ns.getScriptRam(growScript, h);
