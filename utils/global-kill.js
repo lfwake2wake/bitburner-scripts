@@ -1,6 +1,6 @@
 /** global-kill.js
  * Kill all running scripts across all servers.
- * Usage: run global-kill.js
+ * Usage: run global-kill.js [--keep-stocks]
  */
 
 /** @param {NS} ns */
@@ -8,6 +8,16 @@ export async function main(ns) {
   ns.disableLog("sleep");
   ns.disableLog("scan");
   ns.disableLog("killall");
+
+  const keepStocks = ns.args.includes("--keep-stocks");
+
+  // Scripts to preserve when --keep-stocks is set
+  const stockScripts = [
+    "stocks/trade.js",
+    "stocks/trader.js",
+    "stocks/stock-trader.js",
+    "stocks/market.js",
+  ];
 
   const visited = new Set();
   const q = ["home"];
@@ -26,36 +36,52 @@ export async function main(ns) {
   let totalKilled = 0;
   let serversProcessed = 0;
 
-  // Kill all processes on other servers first
+  function isStockScript(filename) {
+    return stockScripts.some(s => filename.includes(s));
+  }
+
+  // Kill processes on other servers
   for (const host of servers) {
-    if (host === currentHost) continue; // Save current host for last
-    
+    if (host === currentHost) continue;
+
     try {
       const procs = ns.ps(host);
-      const killed = ns.killall(host);
-      if (killed) {
-        totalKilled += procs.length;
-        serversProcessed++;
-        await ns.sleep(50); // Small delay to ensure kills are processed
+      if (keepStocks) {
+        // Kill individual processes, skipping stock scripts
+        for (const proc of procs) {
+          if (!isStockScript(proc.filename)) {
+            ns.kill(proc.pid);
+            totalKilled++;
+          }
+        }
+        if (procs.length > 0) serversProcessed++;
+      } else {
+        const killed = ns.killall(host);
+        if (killed) {
+          totalKilled += procs.length;
+          serversProcessed++;
+        }
       }
+      await ns.sleep(50);
     } catch (e) {
-      // Ignore errors for servers we can't access
+      // Ignore errors
     }
   }
 
-  // Finally, kill everything on current host except this script
+  // Kill on current host, preserve this script and optionally stocks
   try {
     const procs = ns.ps(currentHost);
     for (const proc of procs) {
-      if (proc.filename !== "global-kill.js" && proc.pid !== ns.pid) {
-        ns.kill(proc.pid);
-        totalKilled++;
-        await ns.sleep(10); // Small delay between kills
-      }
+      if (proc.filename === "global-kill.js" || proc.pid === ns.pid) continue;
+      if (keepStocks && isStockScript(proc.filename)) continue;
+      ns.kill(proc.pid);
+      totalKilled++;
+      await ns.sleep(10);
     }
   } catch (e) {
     // Ignore errors
   }
 
-  ns.tprint(`✓ Killed ${totalKilled} processes across ${serversProcessed + 1} servers.`);
+  const stockMsg = keepStocks ? " (stock scripts preserved)" : "";
+  ns.tprint(`✓ Killed ${totalKilled} processes across ${serversProcessed + 1} servers${stockMsg}.`);
 }
