@@ -118,15 +118,15 @@ export async function main(ns) {
     growThreadsBase = Math.ceil(ns.formulas.hacking.growThreads(server, player, maxMoney, 1));
     
     } else {
-        // Use growthAnalyze() — accurate without Formulas.exe
         const moneyAfterHack = Math.max(1, maxMoney - moneyStolen);
-        const growthFactor = maxMoney / moneyAfterHack;
-        growThreadsBase = Math.ceil(ns.growthAnalyze(target, growthFactor));
+        const growthFactor = maxMoney / Math.max(1, moneyAfterHack);
+        const timingRatio = growTime / hackTime;
+        growThreadsBase = Math.ceil(ns.growthAnalyze(target, growthFactor) * timingRatio);
     }
   
   // Calculate weaken threads needed to counteract security (using BitNode-aware weaken amount)
-  const securityFromHack = hackThreadsBase * HACK_SECURITY;
-  const securityFromGrow = growThreadsBase * GROW_SECURITY;
+  const securityFromHack = hackThreadsBase * HACK_SECURITY * (weakenTime / hackTime);
+  const securityFromGrow = growThreadsBase * GROW_SECURITY * (weakenTime / growTime);
   const totalSecurity = securityFromHack + securityFromGrow;
   const weakenThreadsBase = Math.ceil(totalSecurity / WEAKEN_AMOUNT);
   
