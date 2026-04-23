@@ -117,17 +117,16 @@ export async function main(ns) {
     // Calculate exact grow threads needed (this accounts for ServerGrowthRate multiplier)
     growThreadsBase = Math.ceil(ns.formulas.hacking.growThreads(server, player, maxMoney, 1));
     
-  } else {
-    // Enhanced estimation without formulas
-    // Account for typical BitNode growth variations
-    const serverGrowth = ns.getServerGrowth(target);
-    const growthMultiplier = Math.max(2, 1 / hackPercent) * (100 / Math.max(1, serverGrowth));
-    growThreadsBase = Math.ceil(hackThreadsBase * growthMultiplier);
-  }
+    } else {
+        const moneyAfterHack = Math.max(1, maxMoney - moneyStolen);
+        const growthFactor = maxMoney / Math.max(1, moneyAfterHack);
+        const timingRatio = growTime / hackTime;
+        growThreadsBase = Math.ceil(ns.growthAnalyze(target, growthFactor) * timingRatio);
+    }
   
   // Calculate weaken threads needed to counteract security (using BitNode-aware weaken amount)
-  const securityFromHack = hackThreadsBase * HACK_SECURITY;
-  const securityFromGrow = growThreadsBase * GROW_SECURITY;
+  const securityFromHack = hackThreadsBase * HACK_SECURITY * (weakenTime / hackTime);
+  const securityFromGrow = growThreadsBase * GROW_SECURITY * (weakenTime / growTime);
   const totalSecurity = securityFromHack + securityFromGrow;
   const weakenThreadsBase = Math.ceil(totalSecurity / WEAKEN_AMOUNT);
   
