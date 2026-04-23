@@ -13,12 +13,16 @@ export async function main(ns) {
 
   // Scripts to preserve when --keep-stocks is set
   const stockScripts = [
-    "stocks/trade.js",
-    "stocks/trader.js",
-    "stocks/stock-trader.js",
-    "stocks/market.js",
+      "stocks/check-stock-api.js",
+      "stocks/close-all-stock.js",
+      "stocks/stock-info.js",
+      "stocks/stock-momentum-analyzer.js",
+      "stocks/stock-monitor.js",
+      "stocks/stock-trader-advanced.js",
+      "stocks/stock-trader-basic.js",
+      "stocks/stock-trader-momentum.js",
   ];
-
+  
   const visited = new Set();
   const q = ["home"];
   const servers = [];
