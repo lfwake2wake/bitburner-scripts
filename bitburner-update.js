@@ -44,12 +44,17 @@ export async function main(ns) {
       { file: "home-batcher.js", folder: folders.batch },
       { file: "prep.js", folder: folders.batch },
       { file: "prep-grow.js", folder: folders.batch },         
+      { file: "simple-batcher.js", folder: folders.batch },       
       { file: "smart-batcher.js", folder: folders.batch }
     ],
     
     analysis: [
       { file: "estimate-production.js", folder: folders.analysis },
-      { file: "f-estimate-production.js", folder: folders.analysis }
+      { file: "f-estimate-production.js", folder: folders.analysis },
+      { file: "f-profit-scan-flex.js", folder: folders.analysis },
+      { file: "production-monitor.js", folder: folders.analysis },
+      { file: "profit-scan-flex.js", folder: folders.analysis },
+      { file: "profit-scan.js", folder: folders.analysis }
     ],
     
     utils: [
