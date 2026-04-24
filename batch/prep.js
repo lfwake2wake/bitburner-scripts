@@ -20,6 +20,55 @@ export async function main(ns) {
     maxRamBudget = Number(args[maxRamArgIdx + 1]);
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // CALCULATE OPTIMAL GROW/WEAKEN RATIO based on server state
+  // ═══════════════════════════════════════════════════════════════
+  const WEAKEN_AMOUNT = ns.weakenAnalyze(1);
+  const GROW_SECURITY = 0.004;
+
+  const currentSecurity = ns.getServerSecurityLevel(target);
+  const minSecurity = ns.getServerMinSecurityLevel(target);
+  const currentMoney = ns.getServerMoneyAvailable(target);
+  const maxMoney = ns.getServerMaxMoney(target);
+
+  // How much weaken needed just to fix existing security
+  const securityExcess = Math.max(0, currentSecurity - minSecurity);
+  const weakenForSecurity = Math.ceil(securityExcess / WEAKEN_AMOUNT);
+
+  // How much grow needed to fill money
+  let growThreadsNeeded = 0;
+  if (currentMoney < maxMoney) {
+    const growthFactor = maxMoney / Math.max(1, currentMoney);
+    growThreadsNeeded = Math.ceil(ns.growthAnalyze(target, growthFactor));
+  }
+
+  // Weaken needed to counteract security from grow threads
+  const weakenForGrow = Math.ceil((growThreadsNeeded * GROW_SECURITY) / WEAKEN_AMOUNT);
+  const weakenThreadsNeeded = weakenForSecurity + weakenForGrow;
+
+  // Calculate ratio
+  const totalNeeded = growThreadsNeeded + weakenThreadsNeeded;
+  const growRatio = totalNeeded > 0 ? growThreadsNeeded / totalNeeded : 0.5;
+  const weakenRatio = totalNeeded > 0 ? weakenThreadsNeeded / totalNeeded : 0.5;
+
+  // Display analysis
+  ns.tprint("═".repeat(55));
+  ns.tprint(`  PREP: ${target}`);
+  ns.tprint("═".repeat(55));
+  ns.tprint(`  Money:    $${ns.formatNumber(currentMoney)} / $${ns.formatNumber(maxMoney)} (${(currentMoney/maxMoney*100).toFixed(1)}%)`);
+  ns.tprint(`  Security: ${currentSecurity.toFixed(3)} / ${minSecurity} min (+${securityExcess.toFixed(3)} excess)`);
+  ns.tprint(`  Grow threads needed:   ${growThreadsNeeded}`);
+  ns.tprint(`  Weaken threads needed: ${weakenThreadsNeeded} (${weakenForSecurity} for security + ${weakenForGrow} for grow)`);
+  ns.tprint(`  Ratio: ${(growRatio*100).toFixed(1)}% grow / ${(weakenRatio*100).toFixed(1)}% weaken`);
+  if (maxRamBudget !== Infinity) ns.tprint(`  RAM cap: ${maxRamBudget}GB`);
+  ns.tprint("═".repeat(55));
+
+  // If already prepped
+  if (growThreadsNeeded === 0 && weakenThreadsNeeded === 0) {
+    ns.tprint(`✓ ${target} is already fully prepped!`);
+    return;
+  }
+
   // BFS all servers
   const visited = new Set();
   const queue = ["home"];
@@ -31,9 +80,6 @@ export async function main(ns) {
     hosts.push(h);
     for (const n of ns.scan(h)) if (!visited.has(n)) queue.push(n);
   }
-
-  ns.tprint(`Prepping ${target} — grow + weaken across all servers...`);
-  if (maxRamBudget !== Infinity) ns.tprint(`RAM cap: ${maxRamBudget}GB`);
 
   let totalGrow = 0;
   let totalWeaken = 0;
@@ -50,9 +96,14 @@ export async function main(ns) {
     const weakenRam = ns.getScriptRam(weakenScript, h);
     const freeRam = Math.min(ns.getServerMaxRam(h) - ns.getServerUsedRam(h), remainingBudget);
 
-    const halfRam = freeRam / 2;
-    const growThreads = Math.floor(halfRam / growRam);
-    const weakenThreads = Math.floor(halfRam / weakenRam);
+    if (freeRam <= 0) continue;
+
+    // Allocate RAM by ratio
+    const growRamAlloc = freeRam * growRatio;
+    const weakenRamAlloc = freeRam * weakenRatio;
+
+    const growThreads = growRatio > 0 ? Math.floor(growRamAlloc / growRam) : 0;
+    const weakenThreads = weakenRatio > 0 ? Math.floor(weakenRamAlloc / weakenRam) : 0;
 
     if (growThreads < 1 && weakenThreads < 1) continue;
 
@@ -65,6 +116,7 @@ export async function main(ns) {
     ns.tprint(`  ${h}: grow x${growThreads} / weaken x${weakenThreads}`);
   }
 
+  ns.tprint("═".repeat(55));
   ns.tprint(`Done — grow x${totalGrow} / weaken x${totalWeaken} total threads launched.`);
   ns.tprint(`Wait ~${Math.ceil(ns.getWeakenTime(target)/1000)}s then check: analyze ${target}`);
 }
