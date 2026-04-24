@@ -1,18 +1,19 @@
 /** wait-check.js - Wait X seconds then print server stats
- *  run utils/wait-check.js <seconds> <target>
- *  Example: run utils/wait-check.js 110 phantasy
+ *  run utils/wait-check.js <target> [seconds]
+ *  Example: run utils/wait-check.js phantasy 110
+ *  Example: run utils/wait-check.js phantasy       # checks immediately
  */
 /** @param {NS} ns */
 export async function main(ns) {
-  const seconds = Number(ns.args[0]);
-  const target = ns.args[1];
+  const target = ns.args[0];
+  const seconds = ns.args[1] !== undefined ? Number(ns.args[1]) : 0;
 
-  if (!seconds || !target) {
-    ns.tprint("Usage: run utils/wait-check.js <seconds> <target>");
+  if (!target) {
+    ns.tprint("Usage: run utils/wait-check.js <target> [seconds]");
     return;
   }
 
-  ns.tprint(`Waiting ${seconds}s then checking ${target}...`);
+  if (seconds > 0) ns.tprint(`Waiting ${seconds}s then checking ${target}...`);
   await ns.sleep(seconds * 1000);
 
   const money = ns.getServerMoneyAvailable(target);
