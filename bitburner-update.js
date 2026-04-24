@@ -40,9 +40,11 @@ export async function main(ns) {
     ],
     
     batch: [
-      { file: "smart-batcher.js", folder: folders.batch },
       { file: "batch-manager.js", folder: folders.batch },
-      { file: "home-batcher.js", folder: folders.batch }
+      { file: "home-batcher.js", folder: folders.batch },
+      { file: "prep.js", folder: folders.batch },
+      { file: "prep-grow.js", folder: folders.batch },         
+      { file: "smart-batcher.js", folder: folders.batch }
     ],
     
     analysis: [
@@ -54,9 +56,11 @@ export async function main(ns) {
       { file: "global-kill.js", folder: folders.utils },
       { file: "list-procs.js", folder: folders.utils },
       { file: "list-pservs.js", folder: folders.utils },
+      { file: "ram-check.js", folder: folders.utils },      
       { file: "server-info.js", folder: folders.utils },
       { file: "share-ram.js", folder: folders.utils },
-      { file: "upgrade-servers.js", folder:folders.utils }
+      { file: "upgrade-servers.js", folder:folders.utils },
+      { file: "wait-check.js", folder: folders.utils }      
     ],
     
     deploy: [
