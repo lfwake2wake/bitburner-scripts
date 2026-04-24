@@ -44,6 +44,7 @@ export async function main(ns) {
       { file: "home-batcher.js", folder: folders.batch },
       { file: "prep.js", folder: folders.batch },
       { file: "prep-grow.js", folder: folders.batch },         
+      { file: "prep-equal-gw.js", folder: folders.batch },           
       { file: "simple-batcher.js", folder: folders.batch },       
       { file: "smart-batcher.js", folder: folders.batch }
     ],
