@@ -62,7 +62,7 @@ export async function main(ns) {
       { file: "list-procs.js", folder: folders.utils },
       { file: "list-pservs.js", folder: folders.utils },
       { file: "ram-check.js", folder: folders.utils },      
-      { file: "rename-pserv.js", folder: folders.utils },      
+      { file: "rename-pservs.js", folder: folders.utils },      
       { file: "server-info.js", folder: folders.utils },
       { file: "share-ram.js", folder: folders.utils },
       { file: "upgrade-servers.js", folder:folders.utils },
