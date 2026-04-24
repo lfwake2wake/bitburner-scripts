@@ -114,10 +114,12 @@ export async function main(ns) {
   const hasFormulas = ns.fileExists("Formulas.exe", "home");
   
   if (hasFormulas) {
-    const player = ns.getPlayer();
-    const server = ns.getServer(target);
-    const timingRatio = growTime / hackTime;
-    growThreadsBase = Math.ceil(ns.formulas.hacking.growThreads(server, player, maxMoney, 1) * timingRatio);
+      const player = ns.getPlayer();
+      const server = ns.getServer(target);
+      // Simulate server state AFTER hacking so growThreads calculates recovery needed
+      server.moneyAvailable = Math.max(1, maxMoney - moneyStolen);
+      const timingRatio = growTime / hackTime;
+      growThreadsBase = Math.ceil(ns.formulas.hacking.growThreads(server, player, maxMoney, 1) * timingRatio);
   } else {
     const moneyAfterHack = Math.max(1, maxMoney - moneyStolen);
     const growthFactor = maxMoney / Math.max(1, moneyAfterHack);
