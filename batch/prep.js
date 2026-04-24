@@ -94,7 +94,8 @@ export async function main(ns) {
 
     const growRam = ns.getScriptRam(growScript, h);
     const weakenRam = ns.getScriptRam(weakenScript, h);
-    const freeRam = Math.min(ns.getServerMaxRam(h) - ns.getServerUsedRam(h), remainingBudget);
+    const homeReserve = h === "home" ? 100 : 0;
+    const freeRam = Math.min(Math.max(0, ns.getServerMaxRam(h) - ns.getServerUsedRam(h) - homeReserve), remainingBudget);
 
     if (freeRam <= 0) continue;
 
