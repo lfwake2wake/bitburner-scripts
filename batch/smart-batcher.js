@@ -97,8 +97,6 @@ export async function main(ns) {
   
   // Calculate timing ratios (how many operations fit in the batch window)
   const batchWindow = Math.max(hackTime, growTime, weakenTime);
-  const hackTimeRatio = weakenTime / hackTime;
-  const growTimeRatio = weakenTime / growTime;
   
   // Get target server state
   const maxMoney = ns.getServerMaxMoney(target);
@@ -116,23 +114,18 @@ export async function main(ns) {
   const hasFormulas = ns.fileExists("Formulas.exe", "home");
   
   if (hasFormulas) {
-    // Use precise formulas calculation (accounts for BitNode multipliers)
-    const player = ns.getPlayer();
-    const server = ns.getServer(target);
-    
-    // Simulate server state AFTER hacking
-    const moneyAfterHack = maxMoney - moneyStolen;
-    const growthNeeded = maxMoney / Math.max(1, moneyAfterHack);
-    
-    // Calculate exact grow threads needed (this accounts for ServerGrowthRate multiplier)
-    growThreadsBase = Math.ceil(ns.formulas.hacking.growThreads(server, player, maxMoney, 1));
-    
-    } else {
-        const moneyAfterHack = Math.max(1, maxMoney - moneyStolen);
-        const growthFactor = maxMoney / Math.max(1, moneyAfterHack);
-        const timingRatio = growTime / hackTime;
-        growThreadsBase = Math.ceil(ns.growthAnalyze(target, growthFactor) * timingRatio);
-    }
+      const player = ns.getPlayer();
+      const server = ns.getServer(target);
+      // Simulate server state AFTER hacking so growThreads calculates recovery needed
+      server.moneyAvailable = Math.max(1, maxMoney - moneyStolen);
+      const timingRatio = growTime / hackTime;
+      growThreadsBase = Math.ceil(ns.formulas.hacking.growThreads(server, player, maxMoney, 1) * timingRatio);
+  } else {
+    const moneyAfterHack = Math.max(1, maxMoney - moneyStolen);
+    const growthFactor = maxMoney / Math.max(1, moneyAfterHack);
+    const timingRatio = growTime / hackTime;
+    growThreadsBase = Math.ceil(ns.growthAnalyze(target, growthFactor) * timingRatio);
+  }
   
   // Calculate weaken threads needed to counteract security (using BitNode-aware weaken amount)
   const securityFromHack = hackThreadsBase * HACK_SECURITY * (weakenTime / hackTime);
