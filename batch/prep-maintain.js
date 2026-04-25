@@ -120,10 +120,6 @@ export async function main(ns) {
     cycle++;
     const hosts = getAllHosts();
 
-    // Kill previous threads before redeploying
-    killExisting(hosts);
-    await ns.sleep(100);
-
     const { totalGrow, totalWeaken } = deploy(hosts);
     const money = ns.getServerMoneyAvailable(target);
     const maxMoney = ns.getServerMaxMoney(target);
