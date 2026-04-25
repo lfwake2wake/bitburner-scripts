@@ -173,6 +173,24 @@ export async function main(ns) {
     ns.tprint("3. Verify the repository is public");
     ns.tprint("4. Check file names match exactly (case-sensitive)");
   }
+
+// Set up useful aliases
+  const aliases = [
+    `alias update="run bitburner-update.js --all"`,
+    `alias killall="run utils/global-kill.js"`,
+    `alias killstocks="run utils/global-kill.js --keep-stocks"`,
+    `alias ramcheck="run utils/ram-check.js"`,
+    `alias scan="run analysis/profit-scan-flex.js"`,
+    `alias monitor="run analysis/production-monitor.js 60"`,
+  ];
+
+  ns.tprint("\n=== Setting Aliases ===");
+  for (const a of aliases) {
+    ns.tprint(`  ${a}`);
+    ns.tprint(`  Run manually in terminal: ${a}`);
+  }
+  ns.tprint("Copy and paste the above aliases into the terminal to set them up.");
+
 }
 
 // Usage examples:
