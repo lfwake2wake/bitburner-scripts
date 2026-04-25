@@ -75,13 +75,17 @@ export async function main(ns) {
   const enableRooting = !flags.includes("--no-root");
   const quiet = flags.includes("--quiet");
 
+  // Parse --max-ram for use as maintain default
+  const maxRamFlagBM = flags.find(f => f.startsWith("--max-ram="));
+  const maxRamBudget = maxRamFlagBM ? Number(maxRamFlagBM.split("=")[1]) : Infinity;
+
   // Parse --maintain flag
   // --maintain         → enabled, uses same RAM as --max-ram
   // --maintain=N       → enabled, uses N GB RAM
   const hasMaintain = flags.some(f => f === "--maintain" || f.startsWith("--maintain="));
   const maintainFlag = flags.find(f => f.startsWith("--maintain="));
   const maintainRam = maintainFlag ? Number(maintainFlag.split("=")[1]) : maxRamBudget;
-  const enableMaintain = hasMaintain;
+  const enableMaintain = hasMaintain && maintainRam > 0;
 
   // Forward these flags to smart-batcher.js when launching it
   const forwardFlags = flags.filter(f => f !== "--no-root" && !f.startsWith("--maintain")); // Don't forward --no-root or --maintain

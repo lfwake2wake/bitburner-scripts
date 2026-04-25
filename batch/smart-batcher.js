@@ -36,7 +36,7 @@ export async function main(ns) {
 
   // Parse hack percent (if present as next arg and not a flag)
   let hackPercent = 0.05; // Default to 5% per batch
-  if (args.length && typeof args[0] === "number") {
+  if (args.length && !String(args[0]).startsWith("--")) {
     const maybeNum = Number(args[0]);
     if (!isNaN(maybeNum) && maybeNum > 0 && maybeNum <= 1) {
       hackPercent = maybeNum;
