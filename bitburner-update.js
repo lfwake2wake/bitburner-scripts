@@ -131,7 +131,8 @@ export async function main(ns) {
       ...scripts.analysis,
       ...scripts.utils,
       ...scripts.deploy,
-      ...scripts.stocks
+      ...scripts.stocks,
+      ...scripts.batch2
     ];
   } else {
     if (downloadEssential) filesToDownload.push(...scripts.essential);
@@ -140,6 +141,7 @@ export async function main(ns) {
     if (downloadUtils) filesToDownload.push(...scripts.utils);
     if (downloadDeploy) filesToDownload.push(...scripts.deploy);
     if (downloadStocks) filesToDownload.push(...scripts.stocks);
+    if (downloadBatch) filesToDownload.push(...scripts.batch2);
   }
 
   // Download files
