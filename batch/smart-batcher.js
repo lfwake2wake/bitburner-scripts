@@ -105,8 +105,8 @@ export async function main(ns) {
   const currentSecurity = ns.getServerSecurityLevel(target);
   
   // Calculate threads needed for optimal prepped server (at max money, min security)
-  const hackThreadsBase = 1;
   const moneyPerHackThread = maxMoney * ns.hackAnalyze(target);
+  const hackThreadsBase = Math.max(1, Math.ceil(hackPercent / ns.hackAnalyze(target)));
   const moneyStolen = hackThreadsBase * moneyPerHackThread;
   
   // Calculate grow threads using formulas if available, otherwise use enhanced estimation
