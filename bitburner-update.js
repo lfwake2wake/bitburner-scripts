@@ -73,6 +73,7 @@ export async function main(ns) {
       { file: "server-info.js", folder: folders.utils },
       { file: "share-ram.js", folder: folders.utils },
       { file: "check-targets.js", folder:folders.utils },
+      { file: "kill-target.js", folder:folders.utils },
       { file: "upgrade-servers.js", folder:folders.utils },
       { file: "find-contracts.js", folder:folders.utils },
       { file: "backdoor-all.js", folder:folders.utils },
