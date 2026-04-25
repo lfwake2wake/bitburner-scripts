@@ -49,7 +49,10 @@ export async function main(ns) {
       { file: "prep-equal-gw.js", folder: folders.batch },
       { file: "prep-maintain.js", folder: folders.batch },
       { file: "simple-batcher.js", folder: folders.batch },
-      { file: "smart-batcher.js", folder: folders.batch }
+      { file: "smart-batcher.js", folder: folders.batch },
+      { file: "b2-grow.js", folder: folders.batch2 },
+      { file: "b2-weaken.js", folder: folders.batch2 },
+      { file: "b2-hack.js", folder: folders.batch2 }
     ],
     
     analysis: [
