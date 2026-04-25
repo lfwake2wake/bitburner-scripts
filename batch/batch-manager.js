@@ -416,22 +416,41 @@ export async function main(ns) {
           info(`Monitoring mode: interval=${(intervalMs/1000).toFixed(0)}s, scan every 10 cycles (~${((intervalMs*10)/60000).toFixed(1)} min)`);
         }
 
-        // Launch prep-maintain if enabled
-        if (enableMaintain && maintainPid === 0) {
+        // Launch prep-maintain if enabled — fire immediately then again at half grow cycle
+        if (enableMaintain) {
           if (!ns.fileExists(maintainer, pservHost)) {
             const ok = ns.scp(maintainer, pservHost);
             if (!ok) { error(`scp failed for ${maintainer}`); }
           }
-          const mRam = ns.getServerMaxRam(pservHost) - ns.getServerUsedRam(pservHost);
           const mScriptRam = ns.getScriptRam(maintainer, pservHost);
-          if (mRam >= mScriptRam) {
-            maintainPid = ns.exec(maintainer, pservHost, 1, target, `--max-ram=${maintainRam}`);
-            if (maintainPid > 0) {
-              important(`✓ Deployed ${maintainer} on ${pservHost} (pid=${maintainPid}, ram=${maintainRam}GB)`);
+
+          // First fire — immediate
+          const mRam1 = ns.getServerMaxRam(pservHost) - ns.getServerUsedRam(pservHost);
+          if (mRam1 >= mScriptRam) {
+            const pid1 = ns.exec(maintainer, pservHost, 1, target, `--max-ram=${maintainRam}`);
+            if (pid1 > 0) {
+              important(`✓ Deployed ${maintainer} immediately (pid=${pid1}, ram=${maintainRam}GB)`);
             } else {
-              error(`Failed to start ${maintainer}`);
+              error(`Failed to start ${maintainer} (immediate)`);
             }
           }
+
+          // Second fire — after half grow cycle
+          const halfGrow = Math.floor(ns.getGrowTime(target) / 2);
+          info(`Scheduling second ${maintainer} in ${(halfGrow/1000).toFixed(1)}s...`);
+          await ns.sleep(halfGrow);
+
+          const mRam2 = ns.getServerMaxRam(pservHost) - ns.getServerUsedRam(pservHost);
+          if (mRam2 >= mScriptRam) {
+            const pid2 = ns.exec(maintainer, pservHost, 1, target, `--max-ram=${maintainRam}`);
+            if (pid2 > 0) {
+              important(`✓ Deployed ${maintainer} offset (pid=${pid2}, ram=${maintainRam}GB)`);
+            } else {
+              error(`Failed to start ${maintainer} (offset)`);
+            }
+          }
+
+          maintainPid = 1; // Mark as deployed so we don't redeploy on next cycle
         }
       } else {
         error(`Failed to start ${batcher} on ${pservHost} via exec(). Possible causes: insufficient RAM, invalid args, or file missing.`);

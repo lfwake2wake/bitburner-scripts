@@ -117,8 +117,7 @@ export async function main(ns) {
 
   let cycle = 0;
 // Initial half-cycle delay to offset from batch-manager
-  ns.tprint(`Waiting ${(waitTime/1000).toFixed(1)}s before deploy (mid-cycle offset)...`);
-  await ns.sleep(waitTime);
+  ns.tprint(`Deploying immediately...`);
 
   const hosts = getAllHosts();
   const { totalGrow, totalWeaken } = deploy(hosts);
