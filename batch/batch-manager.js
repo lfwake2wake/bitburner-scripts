@@ -75,8 +75,16 @@ export async function main(ns) {
   const enableRooting = !flags.includes("--no-root");
   const quiet = flags.includes("--quiet");
 
+  // Parse --maintain flag
+  // --maintain         → enabled, uses same RAM as --max-ram
+  // --maintain=N       → enabled, uses N GB RAM
+  const hasMaintain = flags.some(f => f === "--maintain" || f.startsWith("--maintain="));
+  const maintainFlag = flags.find(f => f.startsWith("--maintain="));
+  const maintainRam = maintainFlag ? Number(maintainFlag.split("=")[1]) : maxRamBudget;
+  const enableMaintain = hasMaintain;
+
   // Forward these flags to smart-batcher.js when launching it
-  const forwardFlags = flags.filter(f => f !== "--no-root"); // Don't forward --no-root
+  const forwardFlags = flags.filter(f => f !== "--no-root" && !f.startsWith("--maintain")); // Don't forward --no-root or --maintain
 
   const batcher = "batch/smart-batcher.js";
 
@@ -238,6 +246,8 @@ export async function main(ns) {
   let initialDeploymentDone = false;
   let lastServerCount = 0;
   let lastTotalRAM = 0;
+  let maintainPid = 0;
+  const maintainer = "batch/prep-maintain.js";
 
   // Initial rooting scan on startup
   if (enableRooting) {
@@ -331,9 +341,15 @@ export async function main(ns) {
       let procs = [];
       try { procs = ns.ps(pservHost); } catch (e) { procs = []; }
       const already = procs.find(p => p.filename === batcher);
+      
       if (already && newServersFound) {
         info(`Network changes detected - killing existing batcher to redeploy...`);
         try { ns.kill(already.pid); } catch (e) { /* ignore */ }
+        // Also kill maintain if running
+        if (maintainPid > 0) {
+          try { ns.kill(maintainPid); } catch (e) { /* ignore */ }
+          maintainPid = 0;
+        }
         await ns.sleep(100);
       } else if (already && !initialDeploymentDone) {
         info(`${batcher} already running on ${pservHost} (pid ${already.pid}).`);
@@ -389,10 +405,29 @@ export async function main(ns) {
         // Wait for smart-batcher to complete (it's a one-shot script)
         await ns.sleep(2000); // Give it time to start
         // Mark initial deployment as done
+        
         if (!initialDeploymentDone) {
           initialDeploymentDone = true;
           info(`Initial deployment complete. Monitoring for new servers...`);
           info(`Monitoring mode: interval=${(intervalMs/1000).toFixed(0)}s, scan every 10 cycles (~${((intervalMs*10)/60000).toFixed(1)} min)`);
+        }
+
+        // Launch prep-maintain if enabled
+        if (enableMaintain && maintainPid === 0) {
+          if (!ns.fileExists(maintainer, pservHost)) {
+            const ok = ns.scp(maintainer, pservHost);
+            if (!ok) { error(`scp failed for ${maintainer}`); }
+          }
+          const mRam = ns.getServerMaxRam(pservHost) - ns.getServerUsedRam(pservHost);
+          const mScriptRam = ns.getScriptRam(maintainer, pservHost);
+          if (mRam >= mScriptRam) {
+            maintainPid = ns.exec(maintainer, pservHost, 1, target, `--max-ram=${maintainRam}`);
+            if (maintainPid > 0) {
+              important(`✓ Deployed ${maintainer} on ${pservHost} (pid=${maintainPid}, ram=${maintainRam}GB)`);
+            } else {
+              error(`Failed to start ${maintainer}`);
+            }
+          }
         }
       } else {
         error(`Failed to start ${batcher} on ${pservHost} via exec(). Possible causes: insufficient RAM, invalid args, or file missing.`);
