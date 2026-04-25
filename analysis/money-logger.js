@@ -43,19 +43,23 @@ export async function main(ns) {
       const threshold = (row / (CHART_HEIGHT - 1));
       const pctLabel = `${(threshold * 100).toFixed(0).padStart(3)}% |`;
 
-      const cols = visible.map((v, i) => {
-        const prev = i > 0 ? visible[i - 1] : v;
-        const high = Math.max(v, prev);
-        const low = Math.min(v, prev);
-        const rowTop = ((row + 1) / (CHART_HEIGHT - 1));
-        const rowBot = (row / (CHART_HEIGHT - 1));
+    const cols = visible.map((v, i) => {
+      const prev = i > 0 ? visible[i - 1] : v;
+      const lo = Math.min(v, prev);
+      const hi = Math.max(v, prev);
 
-        if (high >= rowTop && low <= rowBot) return "│"; // line passes through
-        if (v >= rowTop && v < rowTop + (1 / (CHART_HEIGHT - 1))) return "●"; // current value
-        if (high >= rowBot && low <= rowTop) return "│"; // connecting line
-        if (Math.abs(v - threshold) < (0.5 / (CHART_HEIGHT - 1))) return "─";
-        return " ";
-      });
+      // Place dot at the nearest row to actual value
+      const targetRow = Math.round(v * (CHART_HEIGHT - 1));
+      if (row === targetRow) return "●";
+
+      // Draw connecting line between prev and current value
+      const prevRow = Math.round(prev * (CHART_HEIGHT - 1));
+      const lineHi = Math.max(targetRow, prevRow);
+      const lineLo = Math.min(targetRow, prevRow);
+      if (row > lineLo && row < lineHi) return "│";
+
+      return " ";
+    });
 
       rows.push(`${pctLabel}${cols.join("")}`);
     }
