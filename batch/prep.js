@@ -88,7 +88,7 @@ export async function main(ns) {
   for (const h of hosts) {
     if (remainingBudget <= 0) break;
     if (!ns.hasRootAccess(h)) continue;
-
+    if (h === "home") continue;
     if (!ns.fileExists(growScript, h)) ns.scp(growScript, h);
     if (!ns.fileExists(weakenScript, h)) ns.scp(weakenScript, h);
 
