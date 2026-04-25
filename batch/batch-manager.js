@@ -1,34 +1,19 @@
 /** batch-manager.js
- * Enhanced batch manager that roots servers and ensures smart-batcher.js runs on a purchased server.
+ * Enhanced batch manager with auto-calculated instance spawning.
  *
  * Usage:
  *   run batch-manager.js [target] [hackPercent] [multiplier] [pservHost] [flags...]
  *
- * Parameters:
- *   target       - Server to hack (default: "joesguns")
- *   hackPercent  - Percentage to steal per batch (default: 0.05 = 5%)
- *                  This gets passed to smart-batcher.js for thread ratio calculations
- *   multiplier   - Timing multiplier for deployment interval (default: 1.25)
- *                  Controls how long to wait between smart-batcher deployments
- *                  This stays with batch-manager and is NOT passed to smart-batcher
- *   pservHost    - Server to run smart-batcher on (default: "home")
+ * Flags:
+ *   --max-ram=N      Cap RAM used by smart-batcher to N GB
+ *   --maintain=N     Launch prep-maintain with N GB (defaults to --max-ram value)
+ *   --offset=N       Wait N seconds before initial deployment
+ *   --secondary      Automatically marks this as a spawned instance (no auto-spawning)
+ *   --quiet          Suppress terminal output
+ *   --no-root        Disable auto-rooting
  *
- * Parameter Flow:
- *   batch-manager uses: target, hackPercent (default: 0.05), multiplier (default: 1.25)
- *   smart-batcher receives: target, hackPercent (+ flags)
- *   Note: multiplier is batch-manager's internal scheduling parameter only
- *
- * Examples:
- *   run batch-manager.js                                   # all defaults
- *   run batch-manager.js joesguns --quiet                  # target + defaults, quiet
- *   run batch-manager.js joesguns 0.10                     # 10% hack, default multiplier
- *   run batch-manager.js joesguns 0.05 1.25 home --quiet   # all explicit
- *   run batch-manager.js --quiet --no-root                 # defaults, disable auto-rooting
- *
- * Features:
- *   - Periodically scans and roots new servers (every 10 cycles by default)
- *   - Manages smart-batcher.js on specified host with optimal timing-based ratios
- *   - Auto-restarts batcher if it stops
+ * Primary instance auto-calculates numInstances = round(weakenTime/hackTime)
+ * and spawns secondary instances with evenly distributed offsets.
  */
 
 /** @param {NS} ns */
@@ -57,57 +42,51 @@ export async function main(ns) {
   ns.disableLog("ps");
   ns.disableLog("kill");
 
-  // Raw args as provided
-  const raw = ns.args.slice().map(a => (typeof a === "string" ? a : String(a)));
+  const raw     = ns.args.slice().map(a => (typeof a === "string" ? a : String(a)));
+  const flags   = raw.filter(a => typeof a === "string" && a.startsWith("--"));
+  const pos     = raw.filter(a => !(typeof a === "string" && a.startsWith("--")));
 
-  // Extract flags (strings that start with --) anywhere in the args
-  const flags = raw.filter(a => typeof a === "string" && a.startsWith("--"));
-  // Positional args are the ones that are not flags
-  const pos = raw.filter(a => !(typeof a === "string" && a.startsWith("--")));
+  const target      = pos.length > 0 ? String(pos[0]) : "joesguns";
+  const hackPercent = pos.length > 1 ? Number(pos[1]) : 0.05;
+  const mult        = pos.length > 2 ? Number(pos[2]) : 1.25;
+  const pservHost   = pos.length > 3 ? String(pos[3]) : "home";
 
-  // Parse positionals with safe fallbacks
-  const target = pos.length > 0 && pos[0] !== undefined ? String(pos[0]) : "joesguns";
-  const hackPercent = pos.length > 1 ? Number(pos[1]) : 0.05; // Default 5% hack per batch
-  const mult = pos.length > 2 ? Number(pos[2]) : 1.25;
-  const pservHost = pos.length > 3 ? String(pos[3]) : "home";
-
-  // Parse flags
   const enableRooting = !flags.includes("--no-root");
-  const quiet = flags.includes("--quiet");
+  const quiet         =  flags.includes("--quiet");
+  const isSecondary   =  flags.includes("--secondary");
 
-  // Parse --max-ram for use as maintain default
+  // Parse --max-ram
   const maxRamFlagBM = flags.find(f => f.startsWith("--max-ram="));
   const maxRamBudget = maxRamFlagBM ? Number(maxRamFlagBM.split("=")[1]) : Infinity;
 
-  // Parse --maintain flag
-  // --maintain         → enabled, uses same RAM as --max-ram
-  // --maintain=N       → enabled, uses N GB RAM
-  const hasMaintain = flags.some(f => f === "--maintain" || f.startsWith("--maintain="));
+  // Parse --maintain
+  const hasMaintain  = flags.some(f => f === "--maintain" || f.startsWith("--maintain="));
   const maintainFlag = flags.find(f => f.startsWith("--maintain="));
-  const maintainRam = maintainFlag ? Number(maintainFlag.split("=")[1]) : maxRamBudget;
+  const maintainRam  = maintainFlag ? Number(maintainFlag.split("=")[1]) : maxRamBudget;
   const enableMaintain = hasMaintain && maintainRam > 0;
 
-  // Forward these flags to smart-batcher.js when launching it
-  const forwardFlags = flags.filter(f => f !== "--no-root" && !f.startsWith("--maintain")); // Don't forward --no-root or --maintain
+  // Parse --offset
+  const offsetFlag = flags.find(f => f.startsWith("--offset="));
+  const offsetMs   = offsetFlag ? Number(offsetFlag.split("=")[1]) * 1000 : 0;
 
-  const batcher = "batch/smart-batcher.js";
+  // Forward flags to smart-batcher
+  const forwardFlags = flags.filter(f =>
+    f !== "--no-root" &&
+    f !== "--secondary" &&
+    !f.startsWith("--maintain") &&
+    !f.startsWith("--offset")
+  );
 
-  // Logging helpers:
-  // - info: Always to log window (ns.print), optionally to terminal (ns.tprint) if not quiet
-  // - important: Always to both log window and terminal
-  // - warn/error: Always to both log window and terminal
+  const batcher    = "batch/smart-batcher.js";
+  const maintainer = "batch/prep-maintain.js";
+
   const info = (...parts) => {
     const msg = parts.join(" ");
-    ns.print(msg); // Always show in log window
-    if (!quiet) ns.tprint(msg); // Also show in terminal unless quiet
+    ns.print(msg);
+    if (!quiet) ns.tprint(msg);
   };
   const important = (...parts) => {
     const msg = parts.join(" ");
-    ns.print(msg);
-    ns.tprint(msg); // Always show in both places
-  };
-  const warn = (...parts) => {
-    const msg = "[WARN] " + parts.join(" ");
     ns.print(msg);
     ns.tprint(msg);
   };
@@ -117,344 +96,247 @@ export async function main(ns) {
     ns.tprint(msg);
   };
 
-  // Get all servers on network
   function getAllServers() {
     const visited = new Set();
-    const queue = ["home"];
+    const queue   = ["home"];
     const servers = [];
-    
     while (queue.length > 0) {
       const host = queue.shift();
       if (visited.has(host)) continue;
       visited.add(host);
       servers.push(host);
-      
-      const neighbors = ns.scan(host);
-      for (const neighbor of neighbors) {
-        if (!visited.has(neighbor)) {
-          queue.push(neighbor);
-        }
-      }
+      for (const n of ns.scan(host)) if (!visited.has(n)) queue.push(n);
     }
     return servers;
   }
 
-  // Calculate total network RAM (useful for detecting upgrades)
   function getTotalNetworkRAM() {
-    const servers = getAllServers();
-    let totalRAM = 0;
-    for (const host of servers) {
-      if (ns.hasRootAccess(host)) {
-        totalRAM += ns.getServerMaxRam(host);
-      }
-    }
-    return totalRAM;
+    return getAllServers()
+      .filter(h => ns.hasRootAccess(h))
+      .reduce((sum, h) => sum + ns.getServerMaxRam(h), 0);
   }
 
-  // Rooting function - scans network and roots accessible servers
-  // Returns: { newlyRooted: number, totalRooted: number }
   async function rootNewServers() {
     if (!enableRooting) return { newlyRooted: 0, totalRooted: 0 };
-
     try {
-      const servers = getAllServers();
-
-      // Check available port-opening programs
+      const servers  = getAllServers();
       const programs = [
-        { name: "BruteSSH.exe", fn: ns.brutessh },
-        { name: "FTPCrack.exe", fn: ns.ftpcrack },
+        { name: "BruteSSH.exe",  fn: ns.brutessh  },
+        { name: "FTPCrack.exe",  fn: ns.ftpcrack  },
         { name: "relaySMTP.exe", fn: ns.relaysmtp },
-        { name: "HTTPWorm.exe", fn: ns.httpworm },
-        { name: "SQLInject.exe", fn: ns.sqlinject }
+        { name: "HTTPWorm.exe",  fn: ns.httpworm  },
+        { name: "SQLInject.exe", fn: ns.sqlinject },
       ];
-      
       const available = programs.filter(p => ns.fileExists(p.name, "home"));
       const portCount = available.length;
+      let newlyRooted = 0, totalRooted = 0;
 
-      // Attempt to root servers
-      let newlyRooted = 0;
-      let totalRooted = 0;
-      
       for (const host of servers) {
-        // Skip home
         if (host === "home") continue;
-        
-        // Count already rooted
-        if (ns.hasRootAccess(host)) {
-          totalRooted++;
-          continue;
-        }
-        
-        // Check requirements
+        if (ns.hasRootAccess(host)) { totalRooted++; continue; }
         const reqPorts = ns.getServerNumPortsRequired(host);
-        const reqHack = ns.getServerRequiredHackingLevel(host);
-        const playerHack = ns.getHackingLevel();
-        
-        // Can we root it?
-        if (reqPorts > portCount || reqHack > playerHack) continue;
-        
+        const reqHack  = ns.getServerRequiredHackingLevel(host);
+        if (reqPorts > portCount || reqHack > ns.getHackingLevel()) continue;
         try {
-          // Open ports
-          for (const prog of available) {
-            prog.fn(host);
-          }
-          
-          // Nuke it!
+          for (const prog of available) prog.fn(host);
           ns.nuke(host);
-          
           if (ns.hasRootAccess(host)) {
             important(`✓ Rooted: ${host} (Level ${reqHack}, ${reqPorts} ports)`);
             newlyRooted++;
             totalRooted++;
           }
-        } catch (e) {
-          // Silently ignore failures - server might not be ready yet
-        }
+        } catch (e) { /* ignore */ }
       }
-
-      if (newlyRooted > 0) {
-        important(`Rooting scan complete: ${newlyRooted} new server(s) rooted`);
-      }
-      
+      if (newlyRooted > 0) important(`Rooting complete: ${newlyRooted} new server(s)`);
       return { newlyRooted, totalRooted };
     } catch (e) {
-      error(`Rooting scan error: ${e}`);
+      error(`Rooting error: ${e}`);
       return { newlyRooted: 0, totalRooted: 0 };
     }
   }
 
-  // compute safe interval from target timings
+  async function launchMaintain(delayMs) {
+    if (!enableMaintain) return;
+    if (!ns.fileExists(maintainer, pservHost)) ns.scp(maintainer, pservHost);
+    const mScriptRam = ns.getScriptRam(maintainer, pservHost);
+
+    if (delayMs > 0) await ns.sleep(delayMs);
+
+    const freeRam = ns.getServerMaxRam(pservHost) - ns.getServerUsedRam(pservHost);
+    if (freeRam >= mScriptRam) {
+      const pid = ns.exec(maintainer, pservHost, 1, target, `--max-ram=${maintainRam}`);
+      if (pid > 0) important(`✓ prep-maintain launched at offset ${(delayMs/1000).toFixed(1)}s (pid=${pid}, ram=${maintainRam}GB)`);
+      else error(`Failed to start prep-maintain at offset ${(delayMs/1000).toFixed(1)}s`);
+    } else {
+      error(`Insufficient RAM for prep-maintain at offset ${(delayMs/1000).toFixed(1)}s`);
+    }
+  }
+
+  // Get timings
   let hackMs = 10000, growMs = 10000, weakenMs = 10000;
-  try { hackMs = Math.max(1, ns.getHackTime(target)); } catch (_) {}
-  try { growMs = Math.max(1, ns.getGrowTime(target)); } catch (_) { growMs = hackMs; }
+  try { hackMs   = Math.max(1, ns.getHackTime(target));   } catch (_) {}
+  try { growMs   = Math.max(1, ns.getGrowTime(target));   } catch (_) { growMs = hackMs; }
   try { weakenMs = Math.max(1, ns.getWeakenTime(target)); } catch (_) { weakenMs = hackMs; }
-  const baseMs = Math.max(hackMs, growMs, weakenMs);
+  const baseMs     = Math.max(hackMs, growMs, weakenMs);
   const intervalMs = Math.max(2000, Math.round(baseMs * (Number.isFinite(mult) ? mult : 1.25)));
 
-  // Startup banner - always visible in both log and terminal
+  // Calculate instances and spacing
+  const numInstances   = Math.round(weakenMs / hackMs);
+  const spacingMs      = Math.round(weakenMs / numInstances);
+
   const banner = "=".repeat(60);
-  ns.print(banner);
-  ns.tprint(banner);
-  ns.print("BATCH MANAGER v1.8.10 - Starting...");
-  ns.tprint("BATCH MANAGER v1.8.10 - Starting...");
-  ns.print(banner);
-  ns.tprint(banner);
-  info(`Target: ${target} | Host: ${pservHost} | HackPercent: ${(hackPercent*100).toFixed(1)}%`);
-  info(`Interval: ${(intervalMs/1000).toFixed(2)}s | Hack Time: ${(hackMs/1000).toFixed(2)}s`);
-  info(`Auto-rooting: ${enableRooting ? "ENABLED (scan every 10 cycles)" : "DISABLED"}`);
-  info(`Quiet mode: ${quiet ? "ON (terminal suppressed)" : "OFF (terminal + log)"}`);
-  ns.print(banner);
-  ns.tprint(banner);
+  ns.print(banner); ns.tprint(banner);
+  ns.print(`BATCH MANAGER v2.0.0 - ${isSecondary ? "SECONDARY" : "PRIMARY"}`);
+  ns.tprint(`BATCH MANAGER v2.0.0 - ${isSecondary ? "SECONDARY" : "PRIMARY"}`);
+  ns.print(banner); ns.tprint(banner);
+  info(`Target: ${target} | HackPercent: ${(hackPercent*100).toFixed(3)}%`);
+  info(`Timings: H=${(hackMs/1000).toFixed(1)}s G=${(growMs/1000).toFixed(1)}s W=${(weakenMs/1000).toFixed(1)}s`);
+  if (!isSecondary) {
+    info(`Auto-instances: ${numInstances} | Spacing: ${(spacingMs/1000).toFixed(1)}s`);
+  }
+  info(`Offset: ${offsetMs/1000}s | Maintain: ${enableMaintain ? maintainRam + "GB" : "OFF"}`);
+  ns.print(banner); ns.tprint(banner);
 
-  // Track deployment state
+  // PRIMARY: spawn secondary instances with evenly spaced offsets
+  if (!isSecondary) {
+    important(`Spawning ${numInstances} instances spaced ${(spacingMs/1000).toFixed(1)}s apart...`);
+
+    for (let i = 1; i < numInstances; i++) {
+      const instanceOffset = Math.round((spacingMs * i) / 1000); // seconds
+      const spawnArgs = [target, hackPercent, mult, pservHost,
+        ...forwardFlags,
+        `--offset=${instanceOffset}`,
+        "--secondary",
+        "--quiet",
+      ];
+      if (maxRamFlagBM) spawnArgs.push(maxRamFlagBM);
+      if (hasMaintain)  spawnArgs.push(maintainFlag || "--maintain");
+
+      const spawnPid = ns.exec("batch/batch-manager.js", pservHost, 1, ...spawnArgs);
+      if (spawnPid > 0) {
+        important(`✓ Spawned instance ${i + 1}/${numInstances} offset=${instanceOffset}s (pid=${spawnPid})`);
+      } else {
+        error(`Failed to spawn instance ${i + 1} offset=${instanceOffset}s`);
+      }
+      await ns.sleep(100);
+    }
+  }
+
+  // Apply this instance's offset
+  if (offsetMs > 0) {
+    info(`Waiting ${offsetMs/1000}s offset before deployment...`);
+    await ns.sleep(offsetMs);
+  }
+
+  // Initial rooting scan (primary only)
+  if (!isSecondary) {
+    const initialRoot = await rootNewServers();
+    info(`Initial scan: ${initialRoot.totalRooted} server(s) rooted`);
+  }
+
+  let lastTotalRAM          = getTotalNetworkRAM();
   let initialDeploymentDone = false;
-  let lastServerCount = 0;
-  let lastTotalRAM = 0;
-  let maintainPid = 0;
-  const maintainer = "batch/prep-maintain.js";
+  let maintainDeployed      = false;
+  let cycleCount            = 0;
 
-  // Initial rooting scan on startup
-  if (enableRooting) {
-    info(`Running initial server scan...`);
-  }
-  const initialRoot = await rootNewServers();
-  lastServerCount = initialRoot.totalRooted;
-  lastTotalRAM = getTotalNetworkRAM();
-  if (enableRooting) {
-    info(`Initial scan complete: ${initialRoot.totalRooted} server(s) rooted (${initialRoot.newlyRooted} new)`);
-    info(`Total network RAM: ${lastTotalRAM.toFixed(0)}GB across rooted servers`);
-  }
-
-  let cycleCount = 0;
   while (true) {
     try {
-      // Periodic rooting scan (every 10 cycles)
       cycleCount++;
       let newServersFound = false;
-      
-      // Quick RAM check every cycle (cheap operation)
+
       const currentTotalRAM = getTotalNetworkRAM();
-      const ramChanged = currentTotalRAM !== lastTotalRAM;
-      
+      const ramChanged      = currentTotalRAM !== lastTotalRAM;
+
       if (ramChanged && initialDeploymentDone) {
-        const ramDiff = currentTotalRAM - lastTotalRAM;
-        important(`✓ Network RAM changed: ${lastTotalRAM.toFixed(0)}GB → ${currentTotalRAM.toFixed(0)}GB (+${ramDiff.toFixed(0)}GB)`);
-        
-        // Estimate per-server breakdown for purchased servers
-        const servers = getAllServers();
-        const pservs = servers.filter(s => s.startsWith("pserv-"));
-        const pservCount = pservs.length;
-        if (pservCount > 0 && ramDiff > 0) {
-          const avgIncrease = ramDiff / pservCount;
-          // Calculate average current RAM per purchased server
-          let totalPservRAM = 0;
-          for (const pserv of pservs) {
-            totalPservRAM += ns.getServerMaxRam(pserv);
-          }
-          const avgCurrentRAM = totalPservRAM / pservCount;
-          info(`  Estimated: ${pservCount} purchased server${pservCount !== 1 ? 's' : ''} (~${avgIncrease.toFixed(0)}GB increase each, now ~${avgCurrentRAM.toFixed(0)}GB per server)`);
-        }
-        
-        lastTotalRAM = currentTotalRAM;
-        newServersFound = true; // Trigger immediate redeployment
+        important(`✓ RAM changed: ${lastTotalRAM.toFixed(0)}GB → ${currentTotalRAM.toFixed(0)}GB`);
+        lastTotalRAM    = currentTotalRAM;
+        newServersFound = true;
+        maintainDeployed = false; // Redeploy maintain on RAM change
       }
-      
-      // Show heartbeat every cycle if interval is long (>60s), otherwise every 5 cycles
-      const heartbeatFrequency = intervalMs > 60000 ? 1 : 5;
-      if (initialDeploymentDone && !ramChanged && cycleCount % heartbeatFrequency === 0 && cycleCount % 10 !== 0) {
-        const nextScanIn = 10 - (cycleCount % 10);
-        info(`[Cycle ${cycleCount}] Waiting... (next scan in ${nextScanIn} cycle${nextScanIn !== 1 ? 's' : ''})`);
+
+      const heartbeatFreq = intervalMs > 60000 ? 1 : 5;
+      if (initialDeploymentDone && !ramChanged &&
+          cycleCount % heartbeatFreq === 0 && cycleCount % 10 !== 0) {
+        info(`[Cycle ${cycleCount}] Monitoring... (next scan in ${10 - (cycleCount % 10)} cycles)`);
       }
-      
-      // Full rooting scan every 10 cycles (expensive operation)
-      if (cycleCount % 10 === 0 && enableRooting) {
-        info(`[Cycle ${cycleCount}] Running server scan...`);
+
+      if (cycleCount % 10 === 0 && enableRooting && !isSecondary) {
         const rootResult = await rootNewServers();
-        
-        info(`[Cycle ${cycleCount}] Scan complete: ${rootResult.totalRooted} total rooted (${rootResult.newlyRooted} new)`);
-        
-        // Update RAM if scan changed it
         const postScanRAM = getTotalNetworkRAM();
         if (postScanRAM !== currentTotalRAM) {
-          const ramDiff = postScanRAM - currentTotalRAM;
-          important(`✓ New servers rooted: +${ramDiff.toFixed(0)}GB RAM from rooting scan`);
+          important(`✓ New servers: +${(postScanRAM - currentTotalRAM).toFixed(0)}GB RAM`);
           lastTotalRAM = postScanRAM;
+          newServersFound = true;
+          maintainDeployed = false;
         } else {
           lastTotalRAM = currentTotalRAM;
         }
-        
-        if (rootResult.newlyRooted > 0) {
-          newServersFound = true;
-          lastServerCount = rootResult.totalRooted;
-        }
+        if (rootResult.newlyRooted > 0) newServersFound = true;
       } else if (!ramChanged) {
-        // Update lastTotalRAM on non-scan cycles if no change detected
         lastTotalRAM = currentTotalRAM;
       }
 
-      // Only deploy if: (1) initial deployment not done, or (2) new servers were found or (3) RAM upgraded
       const shouldDeploy = !initialDeploymentDone || newServersFound;
-      
       if (!shouldDeploy) {
-        // Nothing new, just wait
         await ns.sleep(intervalMs);
         continue;
       }
 
-      // See if batcher already running on the chosen pserv - kill it if we're redeploying
+      // Kill existing batcher if redeploying
       let procs = [];
       try { procs = ns.ps(pservHost); } catch (e) { procs = []; }
       const already = procs.find(p => p.filename === batcher);
-      
+
       if (already && newServersFound) {
-        info(`Network changes detected - killing existing batcher to redeploy...`);
         try { ns.kill(already.pid); } catch (e) { /* ignore */ }
-        // Also kill maintain if running
-        if (maintainPid > 0) {
-          try { ns.kill(maintainPid); } catch (e) { /* ignore */ }
-          maintainPid = 0;
-        }
         await ns.sleep(100);
       } else if (already && !initialDeploymentDone) {
-        info(`${batcher} already running on ${pservHost} (pid ${already.pid}).`);
+        info(`${batcher} already running (pid ${already.pid}).`);
         await ns.sleep(intervalMs);
         continue;
       }
 
-      // Ensure the batcher file exists on the pserv; try to scp if missing
+      // SCP batcher if needed
       if (!ns.fileExists(batcher, pservHost)) {
-        info(`${batcher} not found on ${pservHost}; attempting scp from ${ns.getHostname()}...`);
-        try {
-          // copy from current host to pservHost
-          const ok = ns.scp(batcher, pservHost);
-          if (!ok) {
-            error(`scp failed. ${batcher} not present on ${pservHost} and cannot be copied.`);
-            await ns.sleep(intervalMs);
-            continue;
-          } else {
-            info(`scp ok: copied ${batcher} -> ${pservHost}`);
-            await ns.sleep(100);
-          }
-        } catch (e) {
-          error(`scp exception copying ${batcher} -> ${pservHost}: ${e}`);
-          await ns.sleep(intervalMs);
-          continue;
-        }
+        const ok = ns.scp(batcher, pservHost);
+        if (!ok) { error(`scp failed for ${batcher}`); await ns.sleep(intervalMs); continue; }
+        await ns.sleep(100);
       }
 
-      // Check RAM on pservHost before attempting to start
-      const freeRam = ns.getServerMaxRam(pservHost) - ns.getServerUsedRam(pservHost);
+      // Check RAM
+      const freeRam   = ns.getServerMaxRam(pservHost) - ns.getServerUsedRam(pservHost);
       const scriptRam = ns.getScriptRam(batcher, pservHost);
       if (freeRam < scriptRam) {
-        error(`Insufficient RAM on ${pservHost}: free=${freeRam.toFixed(2)}GB need=${scriptRam.toFixed(2)}GB. Will retry.`);
+        error(`Insufficient RAM: free=${freeRam.toFixed(2)}GB need=${scriptRam.toFixed(2)}GB`);
         await ns.sleep(intervalMs);
         continue;
       }
 
-      // Build args to pass to smart-batcher.js: target, hackPercent (if valid), then forward flags
-      const args = [];
-      args.push(target);
-      if (isFinite(hackPercent) && hackPercent > 0 && hackPercent <= 1) {
-        args.push(hackPercent);
-      }
-      // append forwarded flags (strings)
-      for (const f of forwardFlags) args.push(f);
+      // Launch smart-batcher
+      const batchArgs = [target];
+      if (isFinite(hackPercent) && hackPercent > 0 && hackPercent <= 1) batchArgs.push(hackPercent);
+      for (const f of forwardFlags) batchArgs.push(f);
 
-      // Exec the batcher on the pservHost (1 thread for the manager)
-      info(`Deploying ${batcher} on ${pservHost}...`);
-      const pid = ns.exec(batcher, pservHost, 1, ...args);
+      const pid = ns.exec(batcher, pservHost, 1, ...batchArgs);
       if (pid > 0) {
-        important(`✓ Deployed ${batcher} on ${pservHost} (pid=${pid})`);
-        info(`  Target: ${target}, HackPercent: ${hackPercent}, Args: ${JSON.stringify(args)}`);
-        // Wait for smart-batcher to complete (it's a one-shot script)
-        await ns.sleep(2000); // Give it time to start
-        // Mark initial deployment as done
-        
+        important(`✓ smart-batcher deployed (pid=${pid})`);
+        await ns.sleep(2000);
+
         if (!initialDeploymentDone) {
           initialDeploymentDone = true;
-          info(`Initial deployment complete. Monitoring for new servers...`);
-          info(`Monitoring mode: interval=${(intervalMs/1000).toFixed(0)}s, scan every 10 cycles (~${((intervalMs*10)/60000).toFixed(1)} min)`);
+          info(`Deployment complete. Monitoring...`);
         }
 
-        // Launch prep-maintain if enabled — fire immediately then again at half grow cycle
-        if (enableMaintain) {
-          if (!ns.fileExists(maintainer, pservHost)) {
-            const ok = ns.scp(maintainer, pservHost);
-            if (!ok) { error(`scp failed for ${maintainer}`); }
-          }
-          const mScriptRam = ns.getScriptRam(maintainer, pservHost);
-
-          // First fire — immediate
-          const mRam1 = ns.getServerMaxRam(pservHost) - ns.getServerUsedRam(pservHost);
-          if (mRam1 >= mScriptRam) {
-            const pid1 = ns.exec(maintainer, pservHost, 1, target, `--max-ram=${maintainRam}`);
-            if (pid1 > 0) {
-              important(`✓ Deployed ${maintainer} immediately (pid=${pid1}, ram=${maintainRam}GB)`);
-            } else {
-              error(`Failed to start ${maintainer} (immediate)`);
-            }
-          }
-
-          // Second fire — after half grow cycle
-          const halfGrow = Math.floor(ns.getGrowTime(target) / 2);
-          info(`Scheduling second ${maintainer} in ${(halfGrow/1000).toFixed(1)}s...`);
-          await ns.sleep(halfGrow);
-
-          const mRam2 = ns.getServerMaxRam(pservHost) - ns.getServerUsedRam(pservHost);
-          if (mRam2 >= mScriptRam) {
-            const pid2 = ns.exec(maintainer, pservHost, 1, target, `--max-ram=${maintainRam}`);
-            if (pid2 > 0) {
-              important(`✓ Deployed ${maintainer} offset (pid=${pid2}, ram=${maintainRam}GB)`);
-            } else {
-              error(`Failed to start ${maintainer} (offset)`);
-            }
-          }
-
-          maintainPid = 1; // Mark as deployed so we don't redeploy on next cycle
+        // Launch prep-maintain if enabled and not yet deployed
+        if (enableMaintain && !maintainDeployed) {
+          // Fire immediately
+          await launchMaintain(0);
+          // Fire again at half grow cycle
+          await launchMaintain(Math.floor(growMs / 2));
+          maintainDeployed = true;
         }
       } else {
-        error(`Failed to start ${batcher} on ${pservHost} via exec(). Possible causes: insufficient RAM, invalid args, or file missing.`);
-        error(`DEBUG: ${pservHost} freeRam=${freeRam.toFixed(2)}GB scriptRam=${scriptRam.toFixed(2)}GB fileExists=${ns.fileExists(batcher, pservHost)}`);
+        error(`Failed to start smart-batcher.`);
       }
     } catch (e) {
       error(`batch-manager exception: ${e}`);
