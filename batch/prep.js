@@ -81,20 +81,20 @@ export async function main(ns) {
     for (const n of ns.scan(h)) if (!visited.has(n)) queue.push(n);
   }
 
+  const includeHome = args.includes("--include-home");
   let totalGrow = 0;
   let totalWeaken = 0;
   let remainingBudget = maxRamBudget;
 
   for (const h of hosts) {
     if (remainingBudget <= 0) break;
-    if (!ns.hasRootAccess(h)) continue;
-    if (h === "home") continue;
+    if (h === "home" && !includeHome) continue;
     if (!ns.fileExists(growScript, h)) ns.scp(growScript, h);
     if (!ns.fileExists(weakenScript, h)) ns.scp(weakenScript, h);
 
     const growRam = ns.getScriptRam(growScript, h);
     const weakenRam = ns.getScriptRam(weakenScript, h);
-    const homeReserve = h === "home" ? 100 : 0;
+    const homeReserve = h === "home" ? 200 : 0;
     const freeRam = Math.min(Math.max(0, ns.getServerMaxRam(h) - ns.getServerUsedRam(h) - homeReserve), remainingBudget);
 
     if (freeRam <= 0) continue;
