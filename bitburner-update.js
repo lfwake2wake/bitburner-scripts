@@ -187,7 +187,6 @@ export async function main(ns) {
   ns.tprint("\n=== Setting Aliases ===");
   for (const a of aliases) {
     ns.tprint(`  ${a}`);
-    ns.tprint(`  Run manually in terminal: ${a}`);
   }
   ns.tprint("Copy and paste the above aliases into the terminal to set them up.");
 
