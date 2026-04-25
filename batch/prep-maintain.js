@@ -116,17 +116,16 @@ export async function main(ns) {
   await ns.sleep(waitTime);
 
   let cycle = 0;
-  while (true) {
-    cycle++;
-    const hosts = getAllHosts();
+// Initial half-cycle delay to offset from batch-manager
+  ns.tprint(`Waiting ${(waitTime/1000).toFixed(1)}s before deploy (mid-cycle offset)...`);
+  await ns.sleep(waitTime);
 
-    const { totalGrow, totalWeaken } = deploy(hosts);
-    const money = ns.getServerMoneyAvailable(target);
-    const maxMoney = ns.getServerMaxMoney(target);
-    const pct = (money / maxMoney * 100).toFixed(1);
+  const hosts = getAllHosts();
+  const { totalGrow, totalWeaken } = deploy(hosts);
+  const money = ns.getServerMoneyAvailable(target);
+  const maxMoney = ns.getServerMaxMoney(target);
+  const pct = (money / maxMoney * 100).toFixed(1);
 
-    ns.tprint(`[Cycle ${cycle}] ${target}: ${pct}% | grow x${totalGrow} / weaken x${totalWeaken}`);
-
-    await ns.sleep(growTime);
-  }
+  ns.tprint(`Deployed — ${target}: ${pct}% | grow x${totalGrow} / weaken x${totalWeaken}`);
+  ns.tprint(`Threads will loop continuously. prep-maintain exiting.`);
 }
