@@ -69,7 +69,7 @@ export async function main(ns) {
 
     for (const h of hosts) {
       if (remainingBudget <= 0) break;
-      if (h === "home") continue; // Skip home
+
       if (!ns.hasRootAccess(h)) continue;
 
       if (!ns.fileExists(growScript, h)) ns.scp(growScript, h);
@@ -77,8 +77,9 @@ export async function main(ns) {
 
       const growRam = ns.getScriptRam(growScript, h);
       const weakenRam = ns.getScriptRam(weakenScript, h);
+      const homeReserve = h === "home" ? 200 : 0;
       const freeRam = Math.min(
-        Math.max(0, ns.getServerMaxRam(h) - ns.getServerUsedRam(h)),
+        Math.max(0, ns.getServerMaxRam(h) - ns.getServerUsedRam(h) - homeReserve),
         remainingBudget
       );
 
