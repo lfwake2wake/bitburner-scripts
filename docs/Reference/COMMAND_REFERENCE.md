@@ -1,4 +1,4 @@
-# Wget Commands Reference
+# Commands Reference
 
 ## One-Time Setup (After Reset)
 ```javascript
