@@ -54,6 +54,7 @@ export async function main(ns) {
       { file: "estimate-production.js", folder: folders.analysis },
       { file: "f-estimate-production.js", folder: folders.analysis },
       { file: "f-profit-scan-flex.js", folder: folders.analysis },
+      { file: "money-logger.js", folder: folders.analysis },
       { file: "production-monitor.js", folder: folders.analysis },
       { file: "profit-scan-flex.js", folder: folders.analysis },
       { file: "profit-scan.js", folder: folders.analysis }
