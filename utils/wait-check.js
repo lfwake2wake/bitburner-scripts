@@ -2,6 +2,7 @@
  *  run utils/wait-check.js <target> [seconds]
  *  Example: run utils/wait-check.js phantasy 110
  *  Example: run utils/wait-check.js phantasy       # checks immediately
+ *  Updated vis VSCode 2024-06-17
  */
 /** @param {NS} ns */
 export async function main(ns) {
