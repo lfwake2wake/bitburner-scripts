@@ -1,17 +1,15 @@
 /** batch-analyzer.js - Analyze running batch setup and recommend optimal settings
- *  run analysis/batch-analyzer.js <target> <hackPercent> <batchRam> <maintainRam>
- *  Example: run analysis/batch-analyzer.js phantasy 0.0075 1024 4000
+ *  run analysis/batch-analyzer.js <target> <hackPercent>
+ *  Example: run analysis/batch-analyzer.js phantasy 0.0075
  */
 /** @param {NS} ns */
 export async function main(ns) {
   const target = ns.args[0];
   const hackPercent = Number(ns.args[1]);
-  const batchRam = Number(ns.args[2]);
-  const maintainRam = Number(ns.args[3]);
 
-  if (!target || isNaN(hackPercent) || isNaN(batchRam) || isNaN(maintainRam)) {
-    ns.tprint("Usage: run analysis/batch-analyzer.js <target> <hackPercent> <batchRam> <maintainRam>");
-    ns.tprint("Example: run analysis/batch-analyzer.js phantasy 0.0075 1024 4000");
+  if (!target || isNaN(hackPercent)) {
+    ns.tprint("Usage: run analysis/batch-analyzer.js <target> <hackPercent>");
+    ns.tprint("Example: run analysis/batch-analyzer.js phantasy 0.0075");
     return;
   }
 
@@ -28,7 +26,7 @@ export async function main(ns) {
   const HACK_SECURITY = 0.002;
   const GROW_SECURITY = 0.004;
 
-  // Scan all servers and count threads targeting this server
+  // Scan all servers
   const visited = new Set();
   const queue = ["home"];
   const hosts = [];
@@ -49,59 +47,70 @@ export async function main(ns) {
 
   for (const h of hosts) {
     if (!ns.hasRootAccess(h)) continue;
-    const procs = ns.ps(h);
-    for (const p of procs) {
-      if (p.args[0] !== target) continue;
-      if (p.filename === hackScript)   { hackThreads += p.threads;   hackRamUsed += p.threads * ns.getScriptRam(hackScript, h); }
-      if (p.filename === growScript)   { growThreads += p.threads;   growRamUsed += p.threads * ns.getScriptRam(growScript, h); }
-      if (p.filename === weakenScript) { weakenThreads += p.threads; weakenRamUsed += p.threads * ns.getScriptRam(weakenScript, h); }
-    }
+    try {
+      const procs = ns.ps(h);
+      for (const p of procs) {
+        if (p.args[0] !== target) continue;
+        const ram = p.threads * ns.getScriptRam(p.filename, h);
+        if (p.filename === hackScript)   { hackThreads += p.threads;   hackRamUsed += ram; }
+        if (p.filename === growScript)   { growThreads += p.threads;   growRamUsed += ram; }
+        if (p.filename === weakenScript) { weakenThreads += p.threads; weakenRamUsed += ram; }
+      }
+    } catch (e) { /* skip */ }
   }
 
   const totalThreads = hackThreads + growThreads + weakenThreads;
   const totalRamUsed = hackRamUsed + growRamUsed + weakenRamUsed;
 
-  // Calculate what hack threads are actually stealing per cycle
+  // What hack is actually stealing
   const moneyPerHackThread = maxMoney * hackAnalyze;
   const actualMoneyStolen = hackThreads * moneyPerHackThread;
   const actualHackPct = actualMoneyStolen / maxMoney;
 
-  // Calculate grow threads needed to recover from actual hack
+  // How many grow threads are actually needed for current hack level
   const moneyAfterHack = Math.max(1, maxMoney - actualMoneyStolen);
   const growthFactor = maxMoney / moneyAfterHack;
   const timingRatio = growTime / hackTime;
   const growThreadsNeeded = Math.ceil(ns.growthAnalyze(target, growthFactor) * timingRatio);
 
-  // Calculate weaken threads needed
+  // How many weaken threads needed
   const secFromHack = hackThreads * HACK_SECURITY * (weakenTime / hackTime);
   const secFromGrow = growThreadsNeeded * GROW_SECURITY * (weakenTime / growTime);
   const weakenThreadsNeeded = Math.ceil((secFromHack + secFromGrow) / WEAKEN_AMOUNT);
 
-  // Assess balance
-  const growDeficit = growThreadsNeeded - growThreads;
-  const isGrowDeficient = growDeficit > 0;
+  const growSurplus = growThreads - growThreadsNeeded;
+  const weakenSurplus = weakenThreads - weakenThreadsNeeded;
+  const isBalanced = growSurplus >= 0 && weakenSurplus >= 0;
 
-  // RAM per thread estimates
-  const hackRamPer = ns.getScriptRam(hackScript, "home");
+  // RAM costs per thread
   const growRamPer = ns.getScriptRam(growScript, "home");
   const weakenRamPer = ns.getScriptRam(weakenScript, "home");
+  const hackRamPer = ns.getScriptRam(hackScript, "home");
 
-  // Recommend optimal hackPercent based on current grow capacity
-  // Work backwards: how many hack threads can current grow support?
-  // Each hack thread needs growthAnalyze threads * timingRatio grow threads
-  const growThreadsAvailable = growThreads; // what's actually running
-  // Solve: hackThreads * growthAnalyze(maxMoney/(maxMoney - hackThreads*moneyPerHackThread)) * timingRatio = growThreadsAvailable
-  // Approximate by iterating
-  let recHackThreads = hackThreads;
-  for (let h = 1; h <= hackThreads * 3; h++) {
+  // How many hack threads can current grow actually support
+  let recHackThreads = 1;
+  for (let h = 1; h <= hackThreads * 5; h++) {
     const stolen = h * moneyPerHackThread;
     if (stolen >= maxMoney) break;
     const gFactor = maxMoney / (maxMoney - stolen);
     const gNeeded = Math.ceil(ns.growthAnalyze(target, gFactor) * timingRatio);
-    if (gNeeded <= growThreadsAvailable) recHackThreads = h;
+    if (gNeeded <= growThreads) recHackThreads = h;
     else break;
   }
   const recHackPct = Math.min(1, recHackThreads * hackAnalyze);
+
+  // Estimate optimal RAM split
+  // Total threads ratio: hack:grow:weaken based on recHackThreads
+  const recMoneyStolen = recHackThreads * moneyPerHackThread;
+  const recGrowFactor = maxMoney / Math.max(1, maxMoney - recMoneyStolen);
+  const recGrowThreads = Math.ceil(ns.growthAnalyze(target, recGrowFactor) * timingRatio);
+  const recWeakenThreads = Math.ceil(
+    (recHackThreads * HACK_SECURITY * (weakenTime / hackTime) +
+     recGrowThreads * GROW_SECURITY * (weakenTime / growTime)) / WEAKEN_AMOUNT
+  );
+  const recTotalRam = (recHackThreads * hackRamPer) + (recGrowThreads * growRamPer) + (recWeakenThreads * weakenRamPer);
+  const recMaintainRam = (growSurplus > 0 ? 0 : Math.abs(growSurplus) * growRamPer) + 
+                         (weakenSurplus > 0 ? 0 : Math.abs(weakenSurplus) * weakenRamPer);
 
   ns.tprint("");
   ns.tprint("═".repeat(60));
@@ -111,45 +120,34 @@ export async function main(ns) {
   ns.tprint(`\n📊 Server State:`);
   ns.tprint(`  Money:    $${ns.formatNumber(currentMoney)} / $${ns.formatNumber(maxMoney)} (${(currentMoney/maxMoney*100).toFixed(1)}%)`);
   ns.tprint(`  Security: ${currentSecurity.toFixed(3)} / ${minSecurity} min`);
-  ns.tprint(`  Hack Time: ${(hackTime/1000).toFixed(1)}s | Grow: ${(growTime/1000).toFixed(1)}s | Weaken: ${(weakenTime/1000).toFixed(1)}s`);
+  ns.tprint(`  Timings:  H=${(hackTime/1000).toFixed(1)}s G=${(growTime/1000).toFixed(1)}s W=${(weakenTime/1000).toFixed(1)}s`);
 
-  ns.tprint(`\n⚡ Current Thread Allocation:`);
-  ns.tprint(`  Hack:   ${hackThreads.toString().padStart(6)} threads | ${hackRamUsed.toFixed(0)}GB RAM | ${(hackThreads/totalThreads*100).toFixed(1)}%`);
-  ns.tprint(`  Grow:   ${growThreads.toString().padStart(6)} threads | ${growRamUsed.toFixed(0)}GB RAM | ${(growThreads/totalThreads*100).toFixed(1)}%`);
-  ns.tprint(`  Weaken: ${weakenThreads.toString().padStart(6)} threads | ${weakenRamUsed.toFixed(0)}GB RAM | ${(weakenThreads/totalThreads*100).toFixed(1)}%`);
+  ns.tprint(`\n⚡ Actual Running Threads (targeting ${target}):`);
+  ns.tprint(`  Hack:   ${hackThreads.toString().padStart(6)} threads | ${hackRamUsed.toFixed(0)}GB RAM | ${totalThreads > 0 ? (hackThreads/totalThreads*100).toFixed(1) : 0}%`);
+  ns.tprint(`  Grow:   ${growThreads.toString().padStart(6)} threads | ${growRamUsed.toFixed(0)}GB RAM | ${totalThreads > 0 ? (growThreads/totalThreads*100).toFixed(1) : 0}%`);
+  ns.tprint(`  Weaken: ${weakenThreads.toString().padStart(6)} threads | ${weakenRamUsed.toFixed(0)}GB RAM | ${totalThreads > 0 ? (weakenThreads/totalThreads*100).toFixed(1) : 0}%`);
   ns.tprint(`  Total:  ${totalThreads.toString().padStart(6)} threads | ${totalRamUsed.toFixed(0)}GB RAM`);
 
   ns.tprint(`\n💰 Hack Analysis:`);
-  ns.tprint(`  Configured hackPercent: ${(hackPercent*100).toFixed(2)}%`);
-  ns.tprint(`  Actual hack threads stealing: ${(actualHackPct*100).toFixed(2)}% per cycle`);
-  ns.tprint(`  Money stolen per cycle: $${ns.formatNumber(actualMoneyStolen)}`);
+  ns.tprint(`  Configured hackPercent: ${(hackPercent*100).toFixed(3)}%`);
+  ns.tprint(`  Actual % stolen/cycle:  ${(actualHackPct*100).toFixed(3)}%`);
+  ns.tprint(`  Money stolen/cycle:     $${ns.formatNumber(actualMoneyStolen)}`);
 
   ns.tprint(`\n⚖️  Balance Check:`);
-  ns.tprint(`  Grow threads running:  ${growThreads}`);
-  ns.tprint(`  Grow threads needed:   ${growThreadsNeeded}`);
-  ns.tprint(`  Grow deficit:          ${growDeficit > 0 ? `⚠ SHORT by ${growDeficit} threads` : `✓ SURPLUS of ${Math.abs(growDeficit)} threads`}`);
-  ns.tprint(`  Weaken threads running: ${weakenThreads}`);
-  ns.tprint(`  Weaken threads needed:  ${weakenThreadsNeeded}`);
+  ns.tprint(`  Grow running vs needed:  ${growThreads} vs ${growThreadsNeeded} → ${growSurplus >= 0 ? `✓ surplus ${growSurplus}` : `⚠ deficit ${Math.abs(growSurplus)}`}`);
+  ns.tprint(`  Weaken running vs needed: ${weakenThreads} vs ${weakenThreadsNeeded} → ${weakenSurplus >= 0 ? `✓ surplus ${weakenSurplus}` : `⚠ deficit ${Math.abs(weakenSurplus)}`}`);
+  ns.tprint(`  Overall: ${isBalanced ? "✓ BALANCED" : "⚠ IMBALANCED — server will drift"}`);
 
   ns.tprint(`\n🎯 Recommendations:`);
-  if (isGrowDeficient) {
-    ns.tprint(`  ⚠ Grow is DEFICIENT — server will slowly drain`);
-    ns.tprint(`  Option 1: Lower hackPercent to ${(recHackPct*100).toFixed(3)}%`);
-    ns.tprint(`    run batch/batch-manager.js ${target} ${recHackPct.toFixed(4)} 1.25 home --max-ram=${batchRam} --maintain=${maintainRam}`);
-    ns.tprint(`  Option 2: Increase --maintain RAM to cover the deficit`);
-    const extraGrowRam = growDeficit * growRamPer;
-    ns.tprint(`    Additional grow RAM needed: ~${extraGrowRam.toFixed(0)}GB`);
-    ns.tprint(`    run batch/batch-manager.js ${target} ${hackPercent} 1.25 home --max-ram=${batchRam} --maintain=${Math.ceil(maintainRam + extraGrowRam)}`);
-  } else {
-    ns.tprint(`  ✓ Grow is sufficient — setup looks balanced`);
-    ns.tprint(`  Current hackPercent ${(hackPercent*100).toFixed(3)}% is sustainable`);
-    ns.tprint(`  You could potentially increase hackPercent to ${(recHackPct*100).toFixed(3)}%`);
-    ns.tprint(`    run batch/batch-manager.js ${target} ${recHackPct.toFixed(4)} 1.25 home --max-ram=${batchRam} --maintain=${maintainRam}`);
+  ns.tprint(`  Optimal hackPercent: ${(recHackPct*100).toFixed(3)}% (${recHackThreads} hack threads)`);
+  ns.tprint(`  Grow threads needed for that: ${recGrowThreads}`);
+  ns.tprint(`  Weaken threads needed:        ${recWeakenThreads}`);
+  ns.tprint(`  Estimated batch RAM needed:   ${recTotalRam.toFixed(0)}GB`);
+  if (!isBalanced) {
+    ns.tprint(`  Estimated extra maintain RAM: ${recMaintainRam.toFixed(0)}GB`);
   }
-
-  ns.tprint(`\n📋 Current Settings:`);
-  ns.tprint(`  batch-manager: --max-ram=${batchRam} hackPercent=${hackPercent}`);
-  ns.tprint(`  prep-maintain: --max-ram=${maintainRam}`);
-  ns.tprint(`  Total RAM dedicated: ${batchRam + maintainRam}GB`);
+  ns.tprint("");
+  ns.tprint(`  Suggested command:`);
+  ns.tprint(`  run batch/batch-manager.js ${target} ${recHackPct.toFixed(4)} 1.25 home --max-ram=${Math.ceil(recTotalRam)} --maintain=${Math.max(1024, Math.ceil(recMaintainRam))}`);
   ns.tprint("═".repeat(60));
 }
