@@ -21,7 +21,8 @@ export async function main(ns) {
     analysis: { url: `${baseUrl}/analysis`, local: "analysis" },
     utils: { url: `${baseUrl}/utils`, local: "utils" },
     deploy: { url: `${baseUrl}/deploy`, local: "deploy" },
-    stocks: { url: `${baseUrl}/stocks`, local: "stocks" }
+    stocks: { url: `${baseUrl}/stocks`, local: "stocks" },
+    batch2: { url: `${baseUrl}/batch2`, local: "batch2" }
   };
   
   // Define script categories with their folder locations
@@ -53,7 +54,7 @@ export async function main(ns) {
     ],
     
     batch2: [
-      { file: "orechestrator.js", folder: folders.batch2 },
+      { file: "orchestrator.js", folder: folders.batch2 },
       { file: "b2-grow.js", folder: folders.batch2 },
       { file: "b2-weaken.js", folder: folders.batch2 },
       { file: "b2-hack.js", folder: folders.batch2 }
@@ -120,6 +121,7 @@ export async function main(ns) {
   const downloadBatch = args.includes("--batch");
   const downloadDeploy = args.includes("--deploy");
   const downloadStocks = args.includes("--stocks");
+  const downloadBatch2 = args.includes("--batch2");
 
   // Determine which files to download
   let filesToDownload = [];
@@ -141,7 +143,7 @@ export async function main(ns) {
     if (downloadUtils) filesToDownload.push(...scripts.utils);
     if (downloadDeploy) filesToDownload.push(...scripts.deploy);
     if (downloadStocks) filesToDownload.push(...scripts.stocks);
-    if (downloadBatch) filesToDownload.push(...scripts.batch2);
+    if (downloadBatch2) filesToDownload.push(...scripts.batch2);
   }
 
   // Download files
