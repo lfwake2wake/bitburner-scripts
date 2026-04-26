@@ -119,6 +119,9 @@ export async function main(ns) {
     const growthFactor   = maxMoney / moneyAfterHack;
     growThreads = Math.ceil(ns.growthAnalyze(target, growthFactor));
   }
+  //ADD DEBUG GROWTH
+  const debugGrowFactor = maxMoney / Math.max(1, maxMoney - moneyStolen);
+  ns.tprint(`DEBUG: moneyStolen=$${ns.formatNumber(moneyStolen)} growFactor=${debugGrowFactor.toFixed(4)} growthAnalyze=${ns.growthAnalyze(target, debugGrowFactor).toFixed(1)}`);
 
   // Weaken threads — two separate weakens
   // weaken1 counters hack security
