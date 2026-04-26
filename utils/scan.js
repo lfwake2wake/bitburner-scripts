@@ -53,7 +53,7 @@ export async function main(ns) {
         
         let hoverText = ["Req Level: ", ns.getServerRequiredHackingLevel(name),
             "&#10;Req Ports: ", ns.getServerNumPortsRequired(name),
-            "&#10;Memory: ", ns.getServerRam(name)[0], "GB",
+            "&#10;Memory: ", ns.getServerMaxRam(name)[0], "GB",
             "&#10;Security: ", ns.getServerSecurityLevel(name),
             "/", ns.getServerMinSecurityLevel(name),
             "&#10;Money: ", Math.round(ns.getServerMoneyAvailable(name)).toLocaleString(), " (", 
