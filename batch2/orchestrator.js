@@ -280,42 +280,38 @@ export async function main(ns) {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // MAIN LOOP — fire batches continuously
+  // MAIN LOOP — With Enhanced Logging
   // ═══════════════════════════════════════════════════════════
   ns.tprint(`\n🚀 Launching ${activeBatches} batches spaced ${batchSpacingMs}ms apart...`);
-  ns.tprint(`   Each batch: h${hackThreads}/g${growThreads}/w${weaken1Threads}/w${weaken2Threads} threads`);
-  ns.tprint(`   Press Ctrl+C or kill the script to stop.\n`);
-
-  let batchId        = 0;
-  let failedBatches  = 0;
+  
+  let batchId = 0;
   let launchedBatches = 0;
+  const logFile = "/logs/orchestrator_diag.txt";
+  ns.write(logFile, `Timestamp,BatchID,TargetMoneyPct,TargetSec,TotalPoolRAM,UsedRAM\n`, "w");
 
   while (true) {
-    const pool    = getServerPool();
+    const pool = getServerPool();
+    const currentMoney = ns.getServerMoneyAvailable(target);
+    const currentSec = ns.getServerSecurityLevel(target);
+    const moneyPct = (currentMoney / maxMoney * 100).toFixed(2);
+    
+    const totalPoolRam = pool.reduce((s, host) => s + ns.getServerMaxRam(host.host), 0);
+    const totalFreeRam = pool.reduce((s, host) => s + host.free, 0);
+
     const success = execBatch(batchId, pool);
 
     if (success) {
       launchedBatches++;
-      failedBatches = 0;
-    } else {
-      failedBatches++;
-      if (failedBatches >= 10) {
-        ns.tprint(`⚠ [Batch ${batchId}] Insufficient RAM for 10 consecutive batches — pausing 1s`);
-        await ns.sleep(1000);
-        failedBatches = 0;
+      // Log every 10 batches to avoid file bloat
+      if (batchId % 10 === 0) {
+        const logLine = `${new Date().toLocaleTimeString()},${batchId},${moneyPct}%,${currentSec.toFixed(2)},${totalPoolRam}GB,${(totalPoolRam - totalFreeRam).toFixed(1)}GB\n`;
+        ns.write(logFile, logLine, "a");
       }
+    } else {
+      ns.print(`⚠ [Batch ${batchId}] RAM Exhaustion. Free: ${totalFreeRam.toFixed(1)}GB`);
     }
 
     batchId++;
-
-    // Periodic status every ~30 seconds
-    if (batchId % Math.round(30000 / batchSpacingMs) === 0) {
-      const money = ns.getServerMoneyAvailable(target);
-      const sec   = ns.getServerSecurityLevel(target);
-      const pct   = (money / maxMoney * 100).toFixed(1);
-      ns.print(`[Batch ${batchId}] ${target}: ${pct}% $${ns.formatNumber(money)} | sec:${sec.toFixed(2)} | launched:${launchedBatches}`);
-    }
-
     await ns.sleep(batchSpacingMs);
   }
 }

@@ -30,14 +30,23 @@ export async function main(ns) {
       args.shift();
     }
   }
+  
+  const player = ns.getPlayer();
+
   for (const a of args) flags.add(String(a));
 
-  const saveFile = flags.has("--save");
+  const verbose = flags.has("--verbose");
+  const saveFile = true; // Always save so the dashboard has fresh data
   const showAll = flags.has("--all");
-  const optimalMode = flags.has("--optimal");
-  // Default behavior: filter out zero-money servers (unless --all is specified)
+
+  // Set optimalMode to true BY DEFAULT
+  const optimalMode = !flags.has("--current");
+
   const onlyMoney = !showAll;
-  const fname = "profiler-overrides.json";
+  const fname = "temp_top_targets.json"; // Ensure this matches your best.js filename
+
+  // Helper to only print if verbose flag is present
+  const vLog = (msg) => { if (verbose) ns.tprint(msg); };
 
   // Always generate fresh timing data (no caching)
   ns.tprint(`profit-scan-flex: generating fresh timing data from rooted hosts...`);
@@ -222,80 +231,84 @@ export async function main(ns) {
     }
   }
 
-  // sort by optimal or current state
+// Sort by optimal or current state
   if (optimalMode) {
-    // Sort by Fleet Score (combines per-thread efficiency + max money capacity)
     rows.sort((a, b) => b.fleetScore - a.fleetScore);
   } else {
     rows.sort((a, b) => b.perThreadPerSec - a.perThreadPerSec);
   }
 
-  ns.tprint("");
-  ns.tprint("═══════════════════════════════════════════════════════════════════════");
-  if (optimalMode) {
-    ns.tprint("  TOP PROFIT TARGETS (by FLEET POTENTIAL - capacity + efficiency)");
-  } else {
-    ns.tprint("  TOP PROFIT TARGETS (by CURRENT $/sec - as-is state)");
-  }
-  ns.tprint("═══════════════════════════════════════════════════════════════════════");
-  ns.tprint("");
+  // Save top 15 targets for best.js
+  const top15 = rows.slice(0, 15).map(r => r.host);
+  ns.write("temp_top_targets.json", JSON.stringify(top15), "w");
 
-  const show = Math.min(limit, rows.length);
-  for (let i = 0; i < show; ++i) {
-    const r = rows[i];
-    const rank = String(i + 1).padStart(2, ' ');
-    const hostName = r.host.padEnd(20);
-    const rootStatus = r.rooted === "YES" ? "✓" : "✗";
-    const ram = String(r.maxRam + "GB").padStart(6);
-    
-    if (optimalMode) {
-      // OPTIMAL MODE: Show fleet potential (capacity + efficiency)
-      const optimalChance = (r.optimalChance * 100).toFixed(1) + "%";
-      const optimalIncome = formatNumber(ns, r.optimalPerThreadPerSec);
-      const prepIndicator = `${r.prepIcon} ${r.prepStatus}`.padEnd(13);
-      const fleetScoreDisplay = r.fleetScore.toFixed(0);
-      
-      ns.tprint(`${rank}. ${hostName} [${rootStatus}] ${ram} RAM | ${prepIndicator} | Score: ${fleetScoreDisplay}`);
-      ns.tprint(`    Max Money: ${formatNumber(ns, r.maxMoney).padEnd(12)} ⭐ | Security: ${r.curSec.toFixed(1)}/${r.minSec} (Δ${r.secDelta.toFixed(1)})`);
-      ns.tprint(`    Per-Thread: ${optimalIncome}/s | Cycle=${(r.optimalBatchCycleMs/1000).toFixed(1)}s | Chance=${optimalChance}`);
-      
-      // Show current vs potential comparison if server needs prep
-      if (r.prepStatus !== "READY") {
-        const currentIncome = formatNumber(ns, r.perThreadPerSec);
-        const improvement = ((r.optimalPerThreadPerSec / r.perThreadPerSec) - 1) * 100;
-        ns.tprint(`    Current: ${currentIncome}/s (${improvement.toFixed(0)}% gain possible after prep)`);
-      }
-    } else {
-      // CURRENT MODE: Show as-is state with prep hints
-      const hackChance = (r.chance * 100).toFixed(1) + "%";
-      const perThreadIncome = formatNumber(ns, r.perThreadPerSec);
-      
-      ns.tprint(`${rank}. ${hostName} [${rootStatus}] ${ram} RAM | ${r.prepIcon} ${r.prepStatus}`);
-      ns.tprint(`    Max Money: ${formatNumber(ns, r.maxMoney).padEnd(12)} | Security: ${r.curSec.toFixed(1)}/${r.minSec} | Hack Chance: ${hackChance}`);
-      ns.tprint(`    Timing: H=${(r.hackTimeMs/1000).toFixed(1)}s G=${(r.growTimeMs/1000).toFixed(1)}s W=${(r.weakenTimeMs/1000).toFixed(1)}s | Income/thread: ${perThreadIncome}`);
-      
-      // Hint at potential if server needs prep
-      if (r.prepStatus !== "READY" && r.optimalPerThreadPerSec > r.perThreadPerSec * 2) {
-        const optimalIncome = formatNumber(ns, r.optimalPerThreadPerSec);
-        ns.tprint(`    💡 Potential after prep: ${optimalIncome}/s`);
-      }
-    }
+  // Only print to terminal if NOT in silent mode
+  if (!flags.has("--silent")) {
     ns.tprint("");
-  }
+    ns.tprint("═══════════════════════════════════════════════════════════════════════");
+    if (optimalMode) {
+      ns.tprint("  TOP PROFIT TARGETS (OPTIMAL FLEET POTENTIAL)");
+    } else {
+      ns.tprint("  TOP PROFIT TARGETS (CURRENT STATE)");
+    }
+    ns.tprint("═══════════════════════════════════════════════════════════════════════");
+    ns.tprint("");
 
-  ns.tprint("───────────────────────────────────────────────────────────────────────");
-  ns.tprint(`Showing ${show} of ${rows.length} reachable hosts with money`);
-  if (optimalMode) {
-    ns.tprint(`Mode: FLEET POTENTIAL - Ranks by capacity + efficiency for large fleets`);
-    ns.tprint(`⭐ Max Money is KEY - High-capacity targets support more threads`);
-    ns.tprint(`Fleet Score = Per-thread income × log10(Max Money)`);
-    ns.tprint(`Tip: Use without --optimal flag to see current state rankings`);
-  } else {
-    ns.tprint(`Mode: CURRENT - Rankings show AS-IS state (current security/money)`);
-    ns.tprint(`Tip: Use --optimal flag to see rankings by FLEET POTENTIAL`);
+    const show = Math.min(limit, rows.length);
+    for (let i = 0; i < show; ++i) {
+      const r = rows[i];
+      const rank = String(i + 1).padStart(2, ' ');
+      const hostName = r.host.padEnd(20);
+      const rootStatus = r.rooted === "YES" ? "✓" : "✗";
+      const ram = String(r.maxRam + "GB").padStart(6);
+
+      if (optimalMode) {
+        const optimalChance = (r.optimalChance * 100).toFixed(1) + "%";
+        const optimalIncome = formatNumber(ns, r.optimalPerThreadPerSec);
+        const prepIndicator = `${r.prepIcon} ${r.prepStatus}`.padEnd(13);
+        const fleetScoreDisplay = r.fleetScore.toFixed(0);
+
+        ns.tprint(`${rank}. ${hostName} [${rootStatus}] ${ram} RAM | ${prepIndicator} | Score: ${fleetScoreDisplay}`);
+        ns.tprint(`    Max Money: ${formatNumber(ns, r.maxMoney).padEnd(12)} ⭐ | Security: ${r.curSec.toFixed(1)}/${r.minSec} (Δ${r.secDelta.toFixed(1)})`);
+        ns.tprint(`    Per-Thread: ${optimalIncome}/s | Cycle=${(r.optimalBatchCycleMs / 1000).toFixed(1)}s | Chance=${optimalChance}`);
+        
+        // Only show timing if it was calculated (F-version)
+        if (r.optimalHackTimeMs) {
+            ns.tprint(`    Optimal Timing: H=${(r.optimalHackTimeMs / 1000).toFixed(1)}s G=${(r.optimalGrowTimeMs / 1000).toFixed(1)}s W=${(r.optimalWeakenTimeMs / 1000).toFixed(1)}s`);
+        }
+
+        if (r.prepStatus !== "READY") {
+          const currentIncome = formatNumber(ns, r.perThreadPerSec);
+          const improvement = ((r.optimalPerThreadPerSec / Math.max(r.perThreadPerSec, 0.001)) - 1) * 100;
+          ns.tprint(`    Current: ${currentIncome}/s → ${improvement.toFixed(0)}% gain after prep`);
+        }
+      } else {
+        const hackChance = (r.chance * 100).toFixed(1) + "%";
+        const perThreadIncome = formatNumber(ns, r.perThreadPerSec);
+
+        ns.tprint(`${rank}. ${hostName} [${rootStatus}] ${ram} RAM | ${r.prepIcon} ${r.prepStatus}`);
+        ns.tprint(`    Max Money: ${formatNumber(ns, r.maxMoney).padEnd(12)} | Security: ${r.curSec.toFixed(1)}/${r.minSec} | Hack Chance: ${hackChance}`);
+        ns.tprint(`    Timing: H=${(r.hackTimeMs / 1000).toFixed(1)}s G=${(r.growTimeMs / 1000).toFixed(1)}s W=${(r.weakenTimeMs / 1000).toFixed(1)}s | Income/thread: ${perThreadIncome}`);
+
+        if (r.prepStatus !== "READY" && r.optimalPerThreadPerSec > r.perThreadPerSec * 1.5) {
+          const optimalIncome = formatNumber(ns, r.optimalPerThreadPerSec);
+          ns.tprint(`    💡 Potential after prep: ${optimalIncome}/s`);
+        }
+      }
+      ns.tprint("");
+    }
+
+    ns.tprint("───────────────────────────────────────────────────────────────────────");
+    ns.tprint(`Showing ${show} of ${rows.length} reachable hosts with money`);
+    
+    // Self-detecting mode message
+    if (ns.fileExists("Formulas.exe", "home")) {
+        ns.tprint(`Mode: FORMULAS ENABLED - High Accuracy`);
+    } else {
+        ns.tprint(`Mode: ESTIMATED - (Purchase Formulas.exe for better accuracy)`);
+    }
+    ns.tprint("═══════════════════════════════════════════════════════════════════════");
   }
-  ns.tprint(`Note: Income values account for realistic batch cycles (grow/weaken overhead).`);
-  ns.tprint("═══════════════════════════════════════════════════════════════════════");
 }
 
 /**
