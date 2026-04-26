@@ -108,9 +108,9 @@ export async function main(ns) {
 
     if (growThreads < 1 && weakenThreads < 1) continue;
 
-    if (growThreads > 0) ns.exec(growScript, h, growThreads, target);
-    if (weakenThreads > 0) ns.exec(weakenScript, h, weakenThreads, target);
-
+    if (growThreads > 0) ns.exec(growScript, h, growThreads, target, "--prep");
+    if (weakenThreads > 0) ns.exec(weakenScript, h, weakenThreads, target, "--prep");
+    
     remainingBudget -= (growThreads * growRam) + (weakenThreads * weakenRam);
     totalGrow += growThreads;
     totalWeaken += weakenThreads;

@@ -87,6 +87,7 @@ export async function main(ns) {
       { file: "backdoor-all.js", folder:folders.utils },
       { file: "scan.js", folder:folders.utils },
       { file: "connect.js", folder:folders.utils },
+      { file: "best.js", folder:folders.utils },
       { file: "wait-check.js", folder: folders.utils }      
     ],
     
