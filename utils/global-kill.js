@@ -1,50 +1,78 @@
-/** @param {NS} ns **/
+/** @param {NS} ns */
 export async function main(ns) {
-  const onlyPrep = ns.args.includes("--prep");
-  const keepStocks = ns.args.includes("--stocks");
+  const args = ns.args.map(String);
+  const targetArg = (args[0] && !args[0].startsWith("--")) ? args[0] : null;
+  
+  const prepOnly = args.includes("--prep");
+  const prepAll  = args.includes("--prep-all");
 
-  const stockScripts = [
-    "stocks/check-stock-api.js", "stocks/close-all-stock.js", "stocks/stock-info.js",
-    "stocks/stock-momentum-analyzer.js", "stocks/stock-monitor.js",
-    "stocks/stock-trader-advanced.js", "stocks/stock-trader-basic.js", "stocks/stock-trader-momentum.js"
+  const scriptsToWatch = [
+    "attack-hack.js", "attack-grow.js", "attack-weaken.js",
+    "b2-hack.js", "b2-grow.js", "b2-weaken.js",
+    "orchestrator.js", "best.js"
   ];
 
   const visited = new Set();
-  const q = ["home"];
-  const servers = [];
-  while (q.length) {
-    const s = q.shift();
-    if (visited.has(s)) continue;
-    visited.add(s); servers.push(s);
-    for (const n of ns.scan(s)) if (!visited.has(n)) q.push(n);
+  const queue = ["home"];
+  const hosts = [];
+  while (queue.length) {
+    const h = queue.shift();
+    if (visited.has(h)) continue;
+    visited.add(h);
+    hosts.push(h);
+    try {
+      for (const n of ns.scan(h)) if (!visited.has(n)) queue.push(n);
+    } catch(e) {}
   }
 
   let totalKilled = 0;
-  const isStock = (file) => stockScripts.some(s => file.includes(s));
 
-  for (const host of servers) {
-    const procs = ns.ps(host);
-    for (const proc of procs) {
-      // Skip this script so it doesn't kill itself mid-run
-      if (proc.pid === ns.pid || proc.filename.includes("global-kill.js")) continue;
+  for (const h of hosts) {
+    if (!ns.hasRootAccess(h)) continue;
+    const procs = ns.ps(h);
+    
+    for (const p of procs) {
+      const isTargetScript = scriptsToWatch.some(name => p.filename.endsWith(name));
+      if (!isTargetScript) continue;
+      
+      const pTarget = p.args[0];
+      const hasPrepFlag = p.args.includes("--prep");
+      let shouldKill = false;
 
-      // The critical check:
-      const hasPrepFlag = proc.args.includes("--prep");
-
-      if (onlyPrep) {
-        if (hasPrepFlag) {
-          ns.kill(proc.pid);
-          totalKilled++;
+      // Logic 1: --prep-all (Kill anything with a --prep flag)
+      if (prepAll && hasPrepFlag) {
+        shouldKill = true;
+      } 
+      // Logic 2: --prep (Kill only if target is prepped)
+      else if (prepOnly && hasPrepFlag) {
+        if (!targetArg || pTarget === targetArg) {
+          const s = ns.getServer(pTarget);
+          if (s.moneyAvailable >= s.moneyMax * 0.99 && s.hackDifficulty <= s.minDifficulty + 0.1) {
+            shouldKill = true;
+          }
         }
-      } else {
-        // Standard global kill logic (with optional stock preservation)
-        if (keepStocks && isStock(proc.filename)) continue;
-        ns.kill(proc.pid);
+      }
+      // Logic 3: Standard Kill (Target match)
+      // We use a separate IF here so that "run script [target]" 
+      // works even if the process has a --prep flag.
+      if (!shouldKill && !prepAll && !prepOnly && targetArg && pTarget === targetArg) {
+        shouldKill = true;
+      }
+      // Logic 4: Global Wipe (No target, no flags)
+      // Kill everything in scriptsToWatch if user ran the script bare.
+      if (!shouldKill && !targetArg && !prepAll && !prepOnly) {
+        shouldKill = true;
+      }
+
+      if (shouldKill) {
+        ns.kill(p.pid);
         totalKilled++;
       }
     }
   }
 
-  const msg = onlyPrep ? " (Prep scripts only)" : keepStocks ? " (Stocks preserved)" : " (Global)";
-  ns.tprint(`✓ Killed ${totalKilled} processes${msg}.`);
+  ns.tprint("═".repeat(45));
+  ns.tprint(`  TERMINATED: ${totalKilled} process(es)`);
+  ns.tprint(`  Mode: ${prepAll ? "PREP-ALL" : prepOnly ? "PREP-ONLY" : "FULL WIPE"}`);
+  ns.tprint("═".repeat(45));
 }

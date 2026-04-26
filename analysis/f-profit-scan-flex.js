@@ -31,7 +31,12 @@
 
 /** @param {NS} ns */
 export async function main(ns) {
+  ns.disableLog("run");
   ns.disableLog("sleep");
+  ns.disableLog("scp");
+  ns.disableLog("scan");
+  ns.disableLog("write");
+    ns.disableLog("getServer");
 
   // Check for Formulas.exe - need to actually test if it works, not just if API exists
   let hasFormulas = false;
@@ -69,6 +74,7 @@ export async function main(ns) {
   let limit = 30;
   const flags = new Set();
 
+
   // parse args: numeric limit first (if present), rest are flags
   if (args.length && typeof args[0] === "number") {
     const n = Number(args[0]);
@@ -77,13 +83,14 @@ export async function main(ns) {
       args.shift();
     }
   }
-  
+
   // Get player stats for formula calculations
   const player = ns.getPlayer();
 
   for (const a of args) flags.add(String(a));
 
-  const verbose = flags.has("--verbose");
+  const quiet = flags.has("--quiet") || flags.has("-q");
+  const verbose = false;
   const saveFile = true; // Always save so the dashboard has fresh data
   const showAll = flags.has("--all");
 
@@ -101,7 +108,10 @@ export async function main(ns) {
     ns.tprint("ERROR: Invalid player object returned from ns.getPlayer()");
     return;
   }
-  ns.tprint(`f-profit-scan-flex: Generating EXACT timing data using Formulas.exe (Player hacking: ${player.hacking || player.skills?.hacking || 'unknown'})...`);
+
+  if (!quiet) {
+    ns.tprint(`f-profit-scan-flex: Generating EXACT timing data...`);
+  }
 
   // Generate fresh overrides from reachable rooted hosts
   let overrides = {};
@@ -153,14 +163,18 @@ export async function main(ns) {
       }
     }
 
-    ns.tprint(`f-profit-scan-flex: Generated ${count} EXACT timing entries (filtering=${onlyMoney ? 'money-only' : 'all-servers'})`);
-
+    if (!quiet) {
+        ns.tprint(`f-profit-scan-flex: Generated ${count} EXACT timing entries...`);
+    }
+    
     overrides = result;
 
     if (saveFile) {
       try {
         ns.write(fname, JSON.stringify(result, null, 2), "w");
-        ns.tprint(`f-profit-scan-flex: Wrote ${fname} with ${Object.keys(result).length} entries`);
+        if (!quiet){
+          ns.tprint(`f-profit-scan-flex: Wrote ${fname} with ${Object.keys(result).length} entries`);
+        }
       } catch (e) {
         ns.tprint(`f-profit-scan-flex: ERROR writing ${fname}: ${e}`);
       }
@@ -291,7 +305,7 @@ export async function main(ns) {
   ns.write("temp_top_targets.json", JSON.stringify(top15), "w");
 
   // Only print to terminal if NOT in silent mode
-  if (!flags.has("--silent")) {
+  if (!flags.has("--quiet")) {
     ns.tprint("");
     ns.tprint("═══════════════════════════════════════════════════════════════════════");
     if (optimalMode) {

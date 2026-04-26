@@ -16,11 +16,14 @@
 
 /** @param {NS} ns */
 export async function main(ns) {
+  ns.disableLog("run");
   ns.disableLog("sleep");
-
+  ns.disableLog("scp");
+  ns.disableLog("scan");
+  ns.disableLog("write");
+  
   const args = ns.args.slice();
   let limit = 30;
-  const flags = new Set();
 
   // parse args: numeric limit first (if present), rest are flags
   if (args.length && typeof args[0] === "number") {
@@ -30,11 +33,13 @@ export async function main(ns) {
       args.shift();
     }
   }
-  
+
+  const flags = new Set();
   const player = ns.getPlayer();
 
   for (const a of args) flags.add(String(a));
 
+  const quiet = flags.has("--quiet") || flags.has("-q");
   const verbose = flags.has("--verbose");
   const saveFile = true; // Always save so the dashboard has fresh data
   const showAll = flags.has("--all");
@@ -48,9 +53,10 @@ export async function main(ns) {
   // Helper to only print if verbose flag is present
   const vLog = (msg) => { if (verbose) ns.tprint(msg); };
 
-  // Always generate fresh timing data (no caching)
-  ns.tprint(`profit-scan-flex: generating fresh timing data from rooted hosts...`);
-
+  if (!quiet) {
+    ns.tprint(`f-profit-scan-flex: Generating EXACT timing data...`);
+  }
+  
   // Generate fresh overrides from reachable rooted hosts
   let overrides = {};
   {
@@ -93,8 +99,9 @@ export async function main(ns) {
       }
     }
 
-    ns.tprint(`profit-scan-flex: generated ${count} timing entries from rooted hosts (filtering=${onlyMoney ? 'money-only' : 'all-servers'})`);
-
+    if (!quiet) {
+        ns.tprint(`f-profit-scan-flex: Generated ${count} EXACT timing entries...`);
+    }
     // Use fresh data in-memory
     overrides = result;
 
@@ -102,7 +109,9 @@ export async function main(ns) {
     if (saveFile) {
       try {
         ns.write(fname, JSON.stringify(result, null, 2), "w");
-        ns.tprint(`profit-scan-flex: Wrote ${fname} with ${Object.keys(result).length} entries on ${ns.getHostname()}`);
+        if (!quiet){
+          ns.tprint(`profit-scan-flex: Wrote ${fname} with ${Object.keys(result).length} entries on ${ns.getHostname()}`);
+        }
       } catch (e) {
         ns.tprint(`profit-scan-flex: ERROR writing ${fname}: ${e}`);
       }
@@ -243,7 +252,7 @@ export async function main(ns) {
   ns.write("temp_top_targets.json", JSON.stringify(top15), "w");
 
   // Only print to terminal if NOT in silent mode
-  if (!flags.has("--silent")) {
+  if (!flags.has("--quiet")) {
     ns.tprint("");
     ns.tprint("═══════════════════════════════════════════════════════════════════════");
     if (optimalMode) {

@@ -92,7 +92,7 @@ export async function main(ns) {
     const gridStyle = "display: grid; grid-template-columns: 1.5fr 2fr 1fr 1.3fr 0.8fr 2.2fr 1fr; gap: 10px 15px; align-items: center;";
 
     while (true) {
-        ns.run(scanner, 1, 15); 
+        ns.run(scanner, 1, 15, "--quiet"); 
         await ns.sleep(400);
 
         if (!ns.fileExists("temp_top_targets.json")) {
