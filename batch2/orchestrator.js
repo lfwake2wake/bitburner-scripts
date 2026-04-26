@@ -23,8 +23,8 @@ export async function main(ns) {
   // ═══════════════════════════════════════════════════════════
   // ARG PARSING
   // ═══════════════════════════════════════════════════════════
-  const args    = ns.args.slice();
-  const target  = String(args.shift());
+  const args = ns.args.slice();
+  const target = String(args.shift());
   if (!target) {
     ns.tprint("Usage: run batch2/orchestrator.js <target> [hackPercent] [--max-ram=N] [--spacing=N] [--dry]");
     return;
@@ -36,9 +36,9 @@ export async function main(ns) {
     if (!isNaN(maybeNum) && maybeNum > 0 && maybeNum < 1) hackPercent = maybeNum;
   }
 
-  const flags       = args.map(String);
-  const dryRun      = flags.includes("--dry");
-  const maxRamFlag  = flags.find(f => f.startsWith("--max-ram="));
+  const flags = args.map(String);
+  const dryRun = flags.includes("--dry");
+  const maxRamFlag = flags.find(f => f.startsWith("--max-ram="));
   const spacingFlag = flags.find(f => f.startsWith("--spacing="));
   const maxRamBudget = maxRamFlag ? Number(maxRamFlag.split("=")[1]) : Infinity;
   const batchSpacingMs = spacingFlag ? Number(spacingFlag.split("=")[1]) : 80;
@@ -46,22 +46,22 @@ export async function main(ns) {
   // ═══════════════════════════════════════════════════════════
   // SCRIPTS
   // ═══════════════════════════════════════════════════════════
-  const hackScript   = "batch2/b2-hack.js";
-  const growScript   = "batch2/b2-grow.js";
+  const hackScript = "batch2/b2-hack.js";
+  const growScript = "batch2/b2-grow.js";
   const weaken1Script = "batch2/b2-weaken.js";
   const weaken2Script = "batch2/b2-weaken.js";
-  const scripts      = [hackScript, growScript, weaken1Script];
+  const scripts = [hackScript, growScript, weaken1Script];
 
   // ═══════════════════════════════════════════════════════════
   // SERVER STATE
   // ═══════════════════════════════════════════════════════════
-  const maxMoney     = ns.getServerMaxMoney(target);
-  const minSecurity  = ns.getServerMinSecurityLevel(target);
+  const maxMoney = ns.getServerMaxMoney(target);
+  const minSecurity = ns.getServerMinSecurityLevel(target);
   const currentMoney = ns.getServerMoneyAvailable(target);
-  const currentSec   = ns.getServerSecurityLevel(target);
+  const currentSec = ns.getServerSecurityLevel(target);
 
   if (currentMoney < maxMoney * 0.99) {
-    ns.tprint(`⚠ WARNING: ${target} is not at max money (${(currentMoney/maxMoney*100).toFixed(1)}%)`);
+    ns.tprint(`⚠ WARNING: ${target} is not at max money (${(currentMoney / maxMoney * 100).toFixed(1)}%)`);
     ns.tprint(`  Run prep.js first for best results.`);
   }
   if (currentSec > minSecurity + 0.1) {
@@ -72,8 +72,8 @@ export async function main(ns) {
   // ═══════════════════════════════════════════════════════════
   // TIMING
   // ═══════════════════════════════════════════════════════════
-  const hackTime   = ns.getHackTime(target);
-  const growTime   = ns.getGrowTime(target);
+  const hackTime = ns.getHackTime(target);
+  const growTime = ns.getGrowTime(target);
   const weakenTime = ns.getWeakenTime(target);
 
   // All operations complete at weakenTime + offset
@@ -87,19 +87,19 @@ export async function main(ns) {
   // grow completes at T - 2*step → additionalMsec = (T - 2*step) - growTime
   // weaken1 completes at T - 1*step → additionalMsec = (T - 1*step) - weakenTime
   // weaken2 completes at T         → additionalMsec = 0
-  const hackDelay    = Math.max(0, (T - 3 * step) - hackTime);
-  const growDelay    = Math.max(0, (T - 2 * step) - growTime);
+  const hackDelay = Math.max(0, (T - 3 * step) - hackTime);
+  const growDelay = Math.max(0, (T - 2 * step) - growTime);
   const weaken1Delay = Math.max(0, (T - 1 * step) - weakenTime);
   const weaken2Delay = 0;
 
   // ═══════════════════════════════════════════════════════════
   // THREAD CALCULATION
   // ═══════════════════════════════════════════════════════════
-  const WEAKEN_AMOUNT  = ns.weakenAnalyze(1);
-  const HACK_SECURITY  = 0.002;
-  const GROW_SECURITY  = 0.004;
-  const hackAnalyze    = ns.hackAnalyze(target);
-  const hasFormulas    = ns.fileExists("Formulas.exe", "home");
+  const WEAKEN_AMOUNT = ns.weakenAnalyze(1);
+  const HACK_SECURITY = 0.002;
+  const GROW_SECURITY = 0.004;
+  const hackAnalyze = ns.hackAnalyze(target);
+  const hasFormulas = ns.fileExists("Formulas.exe", "home");
 
   // Hack threads to steal hackPercent
   const hackThreads = Math.max(1, Math.ceil(hackPercent / hackAnalyze));
@@ -116,7 +116,7 @@ export async function main(ns) {
     growThreads = Math.ceil(ns.formulas.hacking.growThreads(server, player, maxMoney, 1));
   } else {
     const moneyAfterHack = Math.max(1, maxMoney - moneyStolen);
-    const growthFactor   = maxMoney / moneyAfterHack;
+    const growthFactor = maxMoney / moneyAfterHack;
     growThreads = Math.ceil(ns.growthAnalyze(target, growthFactor));
   }
   //ADD DEBUG GROWTH
@@ -130,21 +130,21 @@ export async function main(ns) {
   const weaken2Threads = Math.ceil((growThreads * GROW_SECURITY) / WEAKEN_AMOUNT);
 
   // RAM per batch
-  const hackRam    = ns.getScriptRam(hackScript,    "home");
-  const growRam    = ns.getScriptRam(growScript,    "home");
-  const weakenRam  = ns.getScriptRam(weaken1Script, "home");
+  const hackRam = ns.getScriptRam(hackScript, "home");
+  const growRam = ns.getScriptRam(growScript, "home");
+  const weakenRam = ns.getScriptRam(weaken1Script, "home");
 
-  const ramPerBatch = (hackThreads    * hackRam)   +
-                      (growThreads    * growRam)   +
-                      (weaken1Threads * weakenRam) +
-                      (weaken2Threads * weakenRam);
+  const ramPerBatch = (hackThreads * hackRam) +
+    (growThreads * growRam) +
+    (weaken1Threads * weakenRam) +
+    (weaken2Threads * weakenRam);
 
   // ═══════════════════════════════════════════════════════════
   // SERVER DISCOVERY
   // ═══════════════════════════════════════════════════════════
   const visited = new Set();
-  const queue   = ["home"];
-  const hosts   = [];
+  const queue = ["home"];
+  const hosts = [];
   while (queue.length) {
     const h = queue.shift();
     if (visited.has(h)) continue;
@@ -167,7 +167,7 @@ export async function main(ns) {
 
   // How many batches fit in one weaken cycle?
   const batchesPerCycle = Math.floor(weakenTime / batchSpacingMs);
-  const activeBatches   = Math.min(maxBatches, batchesPerCycle);
+  const activeBatches = Math.min(maxBatches, batchesPerCycle);
 
   // ═══════════════════════════════════════════════════════════
   // DISPLAY PLAN
@@ -177,12 +177,12 @@ export async function main(ns) {
   ns.tprint(`  BATCH2 ORCHESTRATOR: ${target}`);
   ns.tprint("═".repeat(65));
   ns.tprint(`\n📊 Server State:`);
-  ns.tprint(`  Money:    $${ns.formatNumber(currentMoney)} / $${ns.formatNumber(maxMoney)} (${(currentMoney/maxMoney*100).toFixed(1)}%)`);
+  ns.tprint(`  Money:    $${ns.formatNumber(currentMoney)} / $${ns.formatNumber(maxMoney)} (${(currentMoney / maxMoney * 100).toFixed(1)}%)`);
   ns.tprint(`  Security: ${currentSec.toFixed(3)} / ${minSecurity} min`);
   ns.tprint(`\n⏱  Timing:`);
-  ns.tprint(`  Hack:   ${(hackTime/1000).toFixed(2)}s | additionalMsec: ${hackDelay.toFixed(0)}ms`);
-  ns.tprint(`  Grow:   ${(growTime/1000).toFixed(2)}s | additionalMsec: ${growDelay.toFixed(0)}ms`);
-  ns.tprint(`  Weaken: ${(weakenTime/1000).toFixed(2)}s`);
+  ns.tprint(`  Hack:   ${(hackTime / 1000).toFixed(2)}s | additionalMsec: ${hackDelay.toFixed(0)}ms`);
+  ns.tprint(`  Grow:   ${(growTime / 1000).toFixed(2)}s | additionalMsec: ${growDelay.toFixed(0)}ms`);
+  ns.tprint(`  Weaken: ${(weakenTime / 1000).toFixed(2)}s`);
   ns.tprint(`  Batch spacing: ${batchSpacingMs}ms | Step: ${step}ms`);
   ns.tprint(`\n⚡ Per-Batch Threads:`);
   ns.tprint(`  Hack:    ${hackThreads} threads | ${(hackThreads * hackRam).toFixed(1)}GB`);
@@ -196,9 +196,9 @@ export async function main(ns) {
   ns.tprint(`  Max batches (time window): ${batchesPerCycle}`);
   ns.tprint(`  Active batches:    ${activeBatches}`);
   ns.tprint(`\n💰 Expected Income:`);
-  const incomePerBatch  = hackThreads * hackAnalyze * maxMoney;
-  const batchesPerSec   = 1000 / batchSpacingMs;
-  const incomePerSec    = incomePerBatch * batchesPerSec;
+  const incomePerBatch = hackThreads * hackAnalyze * maxMoney;
+  const batchesPerSec = 1000 / batchSpacingMs;
+  const incomePerSec = incomePerBatch * batchesPerSec;
   ns.tprint(`  Per batch:  $${ns.formatNumber(incomePerBatch)}`);
   ns.tprint(`  Per second: $${ns.formatNumber(incomePerSec)}`);
   ns.tprint(`  Per minute: $${ns.formatNumber(incomePerSec * 60)}`);
@@ -244,37 +244,35 @@ export async function main(ns) {
   // Returns true if batch was fully deployed, false if insufficient RAM
   // ═══════════════════════════════════════════════════════════
   function execBatch(batchId, pool) {
-    // We need to distribute 4 script types across available servers
-    // Pack threads onto servers greedily
     const needed = [
-      { script: hackScript,    threads: hackThreads,    delay: hackDelay,    name: "hack"    },
-      { script: growScript,    threads: growThreads,    delay: growDelay,    name: "grow"    },
-      { script: weaken1Script, threads: weaken1Threads, delay: weaken1Delay, name: "weaken1" },
-      { script: weaken2Script, threads: weaken2Threads, delay: weaken2Delay, name: "weaken2" },
+      { script: hackScript, threads: hackThreads, delay: hackDelay },
+      { script: growScript, threads: growThreads, delay: growDelay },
+      { script: weaken1Script, threads: weaken1Threads, delay: weaken1Delay },
+      { script: weaken2Script, threads: weaken2Threads, delay: weaken2Delay },
     ];
 
-    // Check if we have enough total RAM
+    // TOTAL RAM CHECK - Only proceed if the ENTIRE batch fits
     const totalNeeded = ramPerBatch;
-    const totalFree   = pool.reduce((sum, s) => sum + s.free, 0);
-    if (totalFree < totalNeeded) return false;
+    const totalFree = pool.reduce((sum, s) => sum + s.free, 0);
+    if (totalFree < totalNeeded) {
+      ns.print(`Skipping Batch ${batchId}: Insufficient Pool RAM (${totalFree.toFixed(1)} / ${totalNeeded.toFixed(1)})`);
+      return false;
+    }
 
-    // Deploy each script type
+    // Only if we have enough RAM do we actually execute
     for (const op of needed) {
       let remaining = op.threads;
       for (const server of pool) {
         if (remaining <= 0) break;
-        const scriptRam  = ns.getScriptRam(op.script, server.host);
-        const canFit     = Math.floor(server.free / scriptRam);
-        const toExec     = Math.min(remaining, canFit);
+        const scriptRam = ns.getScriptRam(op.script, server.host);
+        const toExec = Math.min(remaining, Math.floor(server.free / scriptRam));
         if (toExec <= 0) continue;
 
-        const pid = ns.exec(op.script, server.host, toExec, target, op.delay);
-        if (pid > 0) {
+        if (ns.exec(op.script, server.host, toExec, target, op.delay)) {
           server.free -= toExec * scriptRam;
-          remaining   -= toExec;
+          remaining -= toExec;
         }
       }
-      if (remaining > 0) return false; // Couldn't fit all threads
     }
     return true;
   }
@@ -283,7 +281,7 @@ export async function main(ns) {
   // MAIN LOOP — With Enhanced Logging
   // ═══════════════════════════════════════════════════════════
   ns.tprint(`\n🚀 Launching ${activeBatches} batches spaced ${batchSpacingMs}ms apart...`);
-  
+
   let batchId = 0;
   let launchedBatches = 0;
   const logFile = "/logs/orchestrator_diag.txt";
@@ -294,7 +292,7 @@ export async function main(ns) {
     const currentMoney = ns.getServerMoneyAvailable(target);
     const currentSec = ns.getServerSecurityLevel(target);
     const moneyPct = (currentMoney / maxMoney * 100).toFixed(2);
-    
+
     const totalPoolRam = pool.reduce((s, host) => s + ns.getServerMaxRam(host.host), 0);
     const totalFreeRam = pool.reduce((s, host) => s + host.free, 0);
 
