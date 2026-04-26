@@ -53,7 +53,7 @@ export async function main(ns) {
         
         let hoverText = ["Req Level: ", ns.getServerRequiredHackingLevel(name),
             "&#10;Req Ports: ", ns.getServerNumPortsRequired(name),
-            "&#10;Memory: ", ns.getServerRam(name)[0], "GB",
+            "&#10;Memory: ", ns.getServerMaxRam(name)[0], "GB",
             "&#10;Security: ", ns.getServerSecurityLevel(name),
             "/", ns.getServerMinSecurityLevel(name),
             "&#10;Money: ", Math.round(ns.getServerMoneyAvailable(name)).toLocaleString(), " (", 
@@ -76,11 +76,11 @@ export async function main(ns) {
             {
                 const doc = eval('document');
                 const terminalInput = doc.getElementById('terminal-input');
-                terminalInput.value='home; run connect.js ${name}';
+                terminalInput.value='home; run utils/connect.js ${name}';
                 const handler = Object.keys(terminalInput)[1];
                 terminalInput[handler].onChange({target:terminalInput});
                 terminalInput[handler].onKeyDown({keyCode:13,preventDefault:()=>null});
-            })();"
+            })();
         
             style='color:${nameColor}'>${name}${faction}</a> `,
             `<font color='fuchisa'>${ctText}</font>`,
