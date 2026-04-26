@@ -13,7 +13,7 @@ export async function main(ns) {
   if (servers.length === 0) { ns.tprint("No purchased servers found."); return; }
 
   // Validate RAM is power of 2
-  const validRam = [8,16,32,64,128,256,512,1024,2048,4096,8192];
+  const validRam = [8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536,131072,262144,524288,1048576];
   if (!targetRam || !validRam.includes(targetRam)) {
     ns.tprint(`Usage: run utils/upgrade-servers.js <targetRam> [--confirm]`);
     ns.tprint(`Valid RAM sizes: ${validRam.join(", ")}`);
