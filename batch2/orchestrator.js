@@ -111,6 +111,8 @@ export async function main(ns) {
     const player = ns.getPlayer();
     const server = ns.getServer(target);
     server.moneyAvailable = Math.max(1, maxMoney - moneyStolen);
+    server.hackDifficulty = server.minDifficulty; // force min security for calculation
+    server.moneyMax = maxMoney;                   // ensure max money is set correctly
     growThreads = Math.ceil(ns.formulas.hacking.growThreads(server, player, maxMoney, 1));
   } else {
     const moneyAfterHack = Math.max(1, maxMoney - moneyStolen);
