@@ -85,7 +85,8 @@ export async function main(ns) {
       { file: "upgrade-servers.js", folder:folders.utils },
       { file: "find-contracts.js", folder:folders.utils },
       { file: "backdoor-all.js", folder:folders.utils },
-      { file: "find-path.js", folder:folders.utils },
+      { file: "scan.js", folder:folders.utils },
+      { file: "connect.js", folder:folders.utils },
       { file: "wait-check.js", folder: folders.utils }      
     ],
     
