@@ -50,6 +50,7 @@ export async function main(ns) {
         // Kill any existing share-ram.js instances
         if (ns.scriptRunning(shareScript, server)) {
             ns.scriptKill(shareScript, server);
+            await ns.sleep(200); // Wait for process to actually die
         }
         
         // Copy and run the script
